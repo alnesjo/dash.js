@@ -22,7 +22,7 @@ angular.module('DashContributorsService', ['ngResource']).factory('contributors'
 app.controller('DashController', function($scope, sources, contributors) {
 
 
-    $scope.selectedItem = {url:"http://dash.edgesuite.net/akamai/bbb_30fps/bbb_30fps.mpd"};
+    $scope.selectedItem = {url:"http://localhost:8059/livesim/testpic_6s/Manifest.mpd"};
 
     sources.query(function (data) {
         $scope.availableStreams = data.items;
@@ -185,6 +185,7 @@ app.controller('DashController', function($scope, sources, contributors) {
     $scope.player.initialize($scope.video, null, $scope.autoPlaySelected);
     $scope.player.setFastSwitchEnabled(true);
     $scope.player.attachVideoContainer(document.getElementById("videoContainer"));
+    $scope.player.setLiveDelayFragmentCount(0);
     // Add HTML-rendered TTML subtitles except for Firefox < v49 (issue #1164)
     if (doesTimeMarchesOn()) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
