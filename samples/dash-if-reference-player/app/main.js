@@ -187,9 +187,9 @@ app.controller('DashController', function($scope, sources, contributors) {
     $scope.video = document.querySelector(".dash-video-player video");
     $scope.player = dashjs.MediaPlayer().create();
     $scope.player.initialize($scope.video, null, $scope.autoPlaySelected);
+    $scope.player.setLiveDelayFragmentCount(0);
     $scope.player.setFastSwitchEnabled(true);
     $scope.player.attachVideoContainer(document.getElementById("videoContainer"));
-    $scope.player.setLiveDelayFragmentCount(0);
     // Add HTML-rendered TTML subtitles except for Firefox < v49 (issue #1164)
     if (doesTimeMarchesOn()) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
