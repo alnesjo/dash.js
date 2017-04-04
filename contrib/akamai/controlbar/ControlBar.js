@@ -84,6 +84,8 @@ var ControlBar = function (dashjsMediaPlayer, displayUTCTimeCodes) {
 
         onPlayTimeUpdate = function (e) {
             updateDuration();
+            var d = new Date();
+            console.log("delay "+(d.getTime()*0.001-player.timeAsUTC()));
             if (!seeking) {
                 setTime(displayUTCTimeCodes ? player.timeAsUTC() : player.time());
                 seekbar.value = player.time();
