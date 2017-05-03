@@ -28,10 +28,10 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-import EventBus from '../core/EventBus';
-import Events from '../core/events/Events';
-import FactoryMaker from '../core/FactoryMaker';
-import Debug from '../core/Debug';
+import EventBus from '../../core/EventBus';
+import Events from '../../core/events/Events';
+import FactoryMaker from '../../core/FactoryMaker';
+import Debug from '../../core/Debug';
 
 function TextTracks() {
 
@@ -57,7 +57,11 @@ function TextTracks() {
         displayCCOnTop,
         topZIndex;
 
-    function initialize () {
+    function initialize() {
+        if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+            return;
+        }
+
         Cue = window.VTTCue || window.TextTrackCue;
         textTrackQueue = [];
         trackElementArr = [];
@@ -90,7 +94,7 @@ function TextTracks() {
 
     }
 
-    function createTrackForUserAgent (i) {
+    function createTrackForUserAgent(i) {
         var kind = textTrackQueue[i].kind;
         var label = textTrackQueue[i].label !== undefined ? textTrackQueue[i].label : textTrackQueue[i].lang;
         var lang = textTrackQueue[i].lang;
@@ -105,9 +109,11 @@ function TextTracks() {
         return track;
     }
 
-    function displayCConTop (value) {
+    function displayCConTop(value) {
         displayCCOnTop = value;
-        if (!captionContainer || document[fullscreenAttribute]) return;
+        if (!captionContainer || document[fullscreenAttribute]) {
+            return;
+        }
         captionContainer.style.zIndex = value ? topZIndex : null;
     }
 
@@ -129,7 +135,7 @@ function TextTracks() {
             });
             captionContainer = videoModel.getTTMLRenderingDiv();
             var defaultIndex = -1;
-            for (var i = 0 ; i < textTrackQueue.length; i++) {
+            for (var i = 0; i < textTrackQueue.length; i++) {
                 var track = createTrackForUserAgent.call(this, i);
                 trackElementArr.push(track); //used to remove tracks from video element when added manually
 
@@ -160,7 +166,10 @@ function TextTracks() {
                 }
                 this.addCaptions(defaultIndex, 0, null);
             }
-            eventBus.trigger(Events.TEXT_TRACKS_ADDED, {index: currentTrackIdx, tracks: textTrackQueue});//send default idx.
+            eventBus.trigger(Events.TEXT_TRACKS_ADDED, {
+                index: currentTrackIdx,
+                tracks: textTrackQueue
+            }); //send default idx.
         }
     }
 
@@ -198,15 +207,19 @@ function TextTracks() {
         }
 
         if (use80Percent) {
-            return { x: videoPictureXAspect + (videoPictureWidthAspect * 0.1),
-                     y: videoPictureYAspect + (videoPictureHeightAspect * 0.1),
-                     w: videoPictureWidthAspect * 0.8,
-                     h: videoPictureHeightAspect * 0.8 }; /* Maximal picture size in videos aspect ratio */
+            return {
+                x: videoPictureXAspect + (videoPictureWidthAspect * 0.1),
+                y: videoPictureYAspect + (videoPictureHeightAspect * 0.1),
+                w: videoPictureWidthAspect * 0.8,
+                h: videoPictureHeightAspect * 0.8
+            }; /* Maximal picture size in videos aspect ratio */
         } else {
-            return { x: videoPictureXAspect,
-                     y: videoPictureYAspect,
-                     w: videoPictureWidthAspect,
-                     h: videoPictureHeightAspect }; /* Maximal picture size in videos aspect ratio */
+            return {
+                x: videoPictureXAspect,
+                y: videoPictureYAspect,
+                w: videoPictureWidthAspect,
+                h: videoPictureHeightAspect
+            }; /* Maximal picture size in videos aspect ratio */
         }
     }
 
@@ -281,6 +294,11 @@ function TextTracks() {
                 image.style.top = '0px';
                 image.style.width = width;
                 image.style.height = height;
+                if ((fullscreenAttribute && document[fullscreenAttribute]) || displayCCOnTop) {
+                    image.style.zIndex = topZIndex;
+                } else {
+                    image.style.zIndex = null;
+                }
             }
         }
     }
@@ -315,11 +333,11 @@ function TextTracks() {
                 if (activeCue.fontSize.hasOwnProperty(key)) {
                     if (activeCue.fontSize[key][0] === '%') {
                         valueFontSize = activeCue.fontSize[key][1] / 100;
-                    }else if (activeCue.fontSize[key][0] === 'c') {
+                    } else if (activeCue.fontSize[key][0] === 'c') {
                         valueFontSize = activeCue.fontSize[key][1];
                     }
 
-                    replaceValue  = (valueFontSize * cellUnit[1]).toString();
+                    replaceValue = (valueFontSize * cellUnit[1]).toString();
 
                     if (key !== 'defaultFontSize') {
                         elements = document.getElementsByClassName(key);
@@ -339,7 +357,7 @@ function TextTracks() {
                 if (activeCue.lineHeight.hasOwnProperty(key)) {
                     if (activeCue.lineHeight[key][0] === '%') {
                         valueLineHeight = activeCue.lineHeight[key][1] / 100;
-                    }else if (activeCue.fontSize[key][0] === 'c') {
+                    } else if (activeCue.fontSize[key][0] === 'c') {
                         valueLineHeight = activeCue.lineHeight[key][1];
                     }
 
@@ -354,13 +372,15 @@ function TextTracks() {
     }
 
     /*
-    * Add captions to track, store for later adding, or add captions added before
-    */
+     * Add captions to track, store for later adding, or add captions added before
+     */
     function addCaptions(trackIdx, timeOffset, captionData) {
-        var track = trackIdx >= 0 ?  video.textTracks[trackIdx] : null;
+        var track = trackIdx >= 0 ? video.textTracks[trackIdx] : null;
         var self = this;
 
-        if (!track) return;
+        if (!track) {
+            return;
+        }
         if (track.mode !== 'showing') {
             if (captionData && captionData.length > 0) {
                 track.nonAddedCues = track.nonAddedCues.concat(captionData);
@@ -384,7 +404,7 @@ function TextTracks() {
             track.cellResolution = currentItem.cellResolution;
             track.isFromCEA608 = currentItem.isFromCEA608;
 
-            if (!videoSizeCheckInterval && (currentItem.type === 'html' || currentItem.type === 'image') ) {
+            if (!videoSizeCheckInterval && (currentItem.type === 'html' || currentItem.type === 'image')) {
                 videoSizeCheckInterval = setInterval(checkVideoSize.bind(this), 500);
             }
 
@@ -406,13 +426,13 @@ function TextTracks() {
                         img.id = 'ttmlImage_' + this.id;
                         img.src = this.image;
                         //img.className = 'cue-image';
-                        img.style.cssText = 'z-index: 2147483648; pointer-events: none; display: block; visibility: visible !important; position: relative !important;';
+                        img.style.cssText = 'pointer-events: none; display: block; visibility: visible !important; position: relative !important;';
                         captionContainer.appendChild(img);
                         scaleImageCue.call(self, this);
                     }
                 };
 
-                cue.onexit =  function () {
+                cue.onexit = function () {
                     if (!captionContainer) {
                         return;
                     }
@@ -423,8 +443,7 @@ function TextTracks() {
                         }
                     }
                 };
-            }
-            else if (currentItem.type === 'html') {
+            } else if (currentItem.type === 'html') {
                 cue = new Cue(currentItem.start - timeOffset, currentItem.end - timeOffset, '');
                 cue.cueHTMLElement = currentItem.cueHTMLElement;
                 cue.regions = currentItem.regions;
@@ -442,7 +461,7 @@ function TextTracks() {
                 captionContainer.style.width = actualVideoWidth + 'px';
                 captionContainer.style.height = actualVideoHeight + 'px';
 
-                cue.onenter =  function () {
+                cue.onenter = function () {
                     if (track.mode === 'showing') {
                         log('Cue ' + this.startTime + '-' + this.endTime + ' : ' + this.cueHTMLElement.id + ' : ' + this.cueHTMLElement.innerText);
                         captionContainer.appendChild(this.cueHTMLElement);
@@ -450,7 +469,7 @@ function TextTracks() {
                     }
                 };
 
-                cue.onexit =  function () {
+                cue.onexit = function () {
                     var divs = captionContainer.childNodes;
                     for (var i = 0; i < divs.length; ++i) {
                         if (divs[i].id === this.cueID) {
@@ -458,8 +477,7 @@ function TextTracks() {
                         }
                     }
                 };
-            }
-            else {
+            } else {
                 cue = new Cue(currentItem.start - timeOffset, currentItem.end - timeOffset, currentItem.data);
                 if (currentItem.styles) {
                     if (currentItem.styles.align !== undefined && 'align' in cue) {
@@ -469,7 +487,7 @@ function TextTracks() {
                         cue.line = currentItem.styles.line;
                     }
                     if (currentItem.styles.position !== undefined && 'position' in cue) {
-                        cue.position = currentItem.styles.position ;
+                        cue.position = currentItem.styles.position;
                     }
                     if (currentItem.styles.size !== undefined && 'size' in cue) {
                         cue.size = currentItem.styles.size;
@@ -524,7 +542,7 @@ function TextTracks() {
             var cues = track.cues;
             var lastIdx = cues.length - 1;
 
-            for (var r = lastIdx; r >= 0 ; r--) {
+            for (var r = lastIdx; r >= 0; r--) {
                 track.removeCue(cues[r]);
             }
 
@@ -537,7 +555,7 @@ function TextTracks() {
         for (var i = 0; i < ln; i++) {
             if (isChrome) {
                 video.removeChild(trackElementArr[i]);
-            }else {
+            } else {
                 var track = getTextTrack.call(this, i);
                 track.nonAddedCues = [];
                 deleteTrackCues.call(this, track);
@@ -560,12 +578,16 @@ function TextTracks() {
 
     /* Set native cue style to transparent background to avoid it being displayed. */
     function setNativeCueStyle() {
-        if (!isChrome) return;
+        if (!isChrome) {
+            return;
+        }
         var styleElement = document.getElementById('native-cue-style');
-        if (styleElement) return; //Already set
+        if (styleElement) {
+            return; //Already set
+        }
 
         styleElement = document.createElement('style');
-        styleElement.id  = 'native-cue-style';
+        styleElement.id = 'native-cue-style';
         document.head.appendChild(styleElement);
         var stylesheet = styleElement.sheet;
         if (video.id) {
@@ -579,7 +601,9 @@ function TextTracks() {
 
     /* Remove the extra cue style with transparent background for native cues. */
     function removeNativeCueStyle() {
-        if (!isChrome) return;
+        if (!isChrome) {
+            return;
+        }
         var styleElement = document.getElementById('native-cue-style');
         if (styleElement) {
             document.head.removeChild(styleElement);
@@ -595,8 +619,9 @@ function TextTracks() {
     }
 
     function setConfig(config) {
-        if (!config) return;
-
+        if (!config) {
+            return;
+        }
         if (config.videoModel) {
             videoModel = config.videoModel;
         }

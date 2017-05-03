@@ -36,7 +36,7 @@ import BufferController from './BufferController';
 import MediaController from './MediaController';
 import BufferLevelRule from '../rules/scheduling/BufferLevelRule';
 import NextFragmentRequestRule from '../rules/scheduling/NextFragmentRequestRule';
-import TextSourceBuffer from '../TextSourceBuffer';
+import TextController from '../text/TextController';
 import FragmentModel from '../models/FragmentModel';
 import SourceBufferController from '../controllers/SourceBufferController';
 import LiveEdgeFinder from '../utils/LiveEdgeFinder';
@@ -94,7 +94,7 @@ function ScheduleController(config) {
         lastQualityIndex = NaN;
         topQualityIndex = {};
         replaceRequestArray = [];
-        isStopped = false;
+        isStopped = true;
         playListMetrics = null;
         playListTraceMetrics = null;
         playListTraceMetricsClosed = true;
@@ -119,13 +119,13 @@ function ScheduleController(config) {
         bufferLevelRule = BufferLevelRule(context).create({
             dashMetrics: dashMetrics,
             metricsModel: metricsModel,
-            textSourceBuffer: TextSourceBuffer(context).getInstance()
+            textController: TextController(context).getInstance()
         });
 
         nextFragmentRequestRule = NextFragmentRequestRule(context).create({
             adapter: adapter,
             sourceBufferController: SourceBufferController(context).getInstance(),
-            textSourceBuffer: TextSourceBuffer(context).getInstance()
+            textController: TextController(context).getInstance()
         });
 
         if (dashManifestModel.getIsTextTrack(type)) {
@@ -202,12 +202,13 @@ function ScheduleController(config) {
             const getNextFragment = function () {
                 if (currentRepresentationInfo.quality !== lastInitQuality) {
                     lastInitQuality = currentRepresentationInfo.quality;
-                    bufferController.switchInitData(streamProcessor.getStreamInfo().id, currentRepresentationInfo.quality);
+                    bufferController.switchInitData(streamProcessor.getStreamInfo().id, currentRepresentationInfo.id);
                 } else {
                     const replacement = replaceRequestArray.shift();
 
                     if (fragmentController.isInitializationRequest(replacement)) {
-                        getInitRequest(replacement.quality);
+                        //to be sure the specific init segment had not already been loaded.
+                        bufferController.switchInitData(replacement.mediaInfo.streamInfo.id, replacement.representationId);
                     } else {
                         const request = nextFragmentRequestRule.execute(streamProcessor, replacement);
                         if (request) {
