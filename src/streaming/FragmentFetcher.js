@@ -32,8 +32,8 @@
  * Created by robert on 2017-05-09.
  */
 /* jshint esversion: 6 */
+/* global Headers: false */
 
-import HeadRequest from './vo/HeadRequest';
 import Error from './vo/Error';
 import EventBus from './../core/EventBus';
 import Events from './../core/events/Events';
