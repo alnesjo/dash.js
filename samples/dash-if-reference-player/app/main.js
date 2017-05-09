@@ -21,12 +21,8 @@ angular.module('DashContributorsService', ['ngResource']).factory('contributors'
 
 app.controller('DashController', function($scope, sources, contributors) {
 
-
-<<<<<<< b73111aeedec0f664a9754415b7de30dc770c517
     $scope.selectedItem = {url:"http://localhost:8059/livesim/chunkdur_1/ato_5/testpic_6s/Manifest.mpd"};
-=======
-    $scope.selectedItem = {url:"http://localhost:8059/livesim/testpic_6s/Manifest.mpd"};
->>>>>>> Testing delay with small (but non-zero) buffer
+    $scope.selectedItem = {url:"http://localhost:8059/livesim/chunkdur_1/ato_5/testpic_6s/Manifest.mpd"};
 
     sources.query(function (data) {
         $scope.availableStreams = data.items;
@@ -187,7 +183,6 @@ app.controller('DashController', function($scope, sources, contributors) {
     $scope.video = document.querySelector(".dash-video-player video");
     $scope.player = dashjs.MediaPlayer().create();
     $scope.player.initialize($scope.video, null, $scope.autoPlaySelected);
-    $scope.player.setLiveDelayFragmentCount(0);
     $scope.player.setFastSwitchEnabled(true);
     $scope.player.attachVideoContainer(document.getElementById("videoContainer"));
     // Add HTML-rendered TTML subtitles except for Firefox < v49 (issue #1164)

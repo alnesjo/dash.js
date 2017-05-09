@@ -32,8 +32,13 @@
  * Created by robert on 2017-05-09.
  */
 /* jshint esversion: 6 */
+<<<<<<< e0a8b41d80ba630b4162fdf0c212d48583c4474e
 /* global Headers: false */
 
+=======
+
+import HeadRequest from './vo/HeadRequest';
+>>>>>>> Trying to replace XHR with Fetch to download chunks
 import Error from './vo/Error';
 import EventBus from './../core/EventBus';
 import Events from './../core/events/Events';
