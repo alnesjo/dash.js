@@ -20,7 +20,7 @@ angular.module('DashContributorsService', ['ngResource']).factory('contributors'
 });
 
 app.controller('DashController', function($scope, sources, contributors) {
-    
+
     $scope.selectedItem = {url:"http://localhost:8059/livesim/chunkdur_1/ato_5/testpic_6s/Manifest.mpd"};
 
     sources.query(function (data) {
