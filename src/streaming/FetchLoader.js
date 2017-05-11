@@ -32,7 +32,7 @@
  * Created by robert on 2017-05-10.
  */
 /* jshint esnext: true */
-/* global Headers: false, ProgressEvent: false, Response: false */
+/* global Headers: false, ProgressEvent: false */
 
 import {HTTPRequest} from './vo/metrics/HTTPRequest';
 import FactoryMaker from '../core/FactoryMaker';
