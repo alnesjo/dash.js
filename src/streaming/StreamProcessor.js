@@ -37,7 +37,7 @@ import TextBufferController from './text/TextBufferController';
 import ScheduleController from './controllers/ScheduleController';
 import MediaPlayerModel from './models/MediaPlayerModel';
 import MetricsModel from './models/MetricsModel';
-import FragmentFetcher from './FragmentFetcher';
+import FragmentLoader from './FragmentLoader';
 import RequestModifier from './utils/RequestModifier';
 import SourceBufferController from './controllers/SourceBufferController';
 import TextController from './text/TextController';
@@ -103,7 +103,7 @@ function StreamProcessor(config) {
         bufferController.initialize(type, mediaSource, this);
         scheduleController.initialize(type, this);
 
-        fragmentLoader = FragmentFetcher(context).create({
+        fragmentLoader = FragmentLoader(context).create({
             metricsModel: MetricsModel(context).getInstance(),
             errHandler: ErrorHandler(context).getInstance(),
             requestModifier: RequestModifier(context).getInstance()
