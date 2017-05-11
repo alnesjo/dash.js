@@ -28,7 +28,8 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-import XHRLoader from './XHRLoader';
+
+import FetchLoader from './FetchLoader';
 import HeadRequest from './vo/HeadRequest';
 import Error from './vo/Error';
 import EventBus from './../core/EventBus';
@@ -48,7 +49,7 @@ function FragmentLoader(config) {
         xhrLoader;
 
     function setup() {
-        xhrLoader = XHRLoader(context).create({
+        xhrLoader = FetchLoader(context).create({
             errHandler: config.errHandler,
             metricsModel: config.metricsModel,
             requestModifier: config.requestModifier
