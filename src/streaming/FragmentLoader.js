@@ -38,7 +38,6 @@ import FactoryMaker from '../core/FactoryMaker';
 
 const FRAGMENT_LOADER_ERROR_LOADING_FAILURE = 1;
 const FRAGMENT_LOADER_ERROR_NULL_REQUEST = 2;
-const FRAGMENT_LOADER_MESSAGE_NULL_REQUEST = 'request is null';
 
 function FragmentLoader(config) {
 
@@ -46,10 +45,10 @@ function FragmentLoader(config) {
     const eventBus = EventBus(context).getInstance();
 
     let instance,
-        xhrLoader;
+        loader;
 
     function setup() {
-        xhrLoader = FetchLoader(context).create({
+        loader = FetchLoader(context).create({
             errHandler: config.errHandler,
             metricsModel: config.metricsModel,
             requestModifier: config.requestModifier
@@ -57,85 +56,87 @@ function FragmentLoader(config) {
     }
 
     function checkForExistence(request) {
-        const report = function (success) {
-            eventBus.trigger(
-                Events.CHECK_FOR_EXISTENCE_COMPLETED, {
-                    request: request,
-                    exists: success
-                }
-            );
-        };
-
         if (request) {
             let headRequest = new HeadRequest(request.url);
-
-            xhrLoader.load({
+            loader.load({
                 request: headRequest,
                 success: function () {
-                    report(true);
+                    eventBus.trigger(Events.CHECK_FOR_EXISTENCE_COMPLETED, {
+                        request: request,
+                        exists: true
+                    });
                 },
                 error: function () {
-                    report(false);
+                    eventBus.trigger(Events.CHECK_FOR_EXISTENCE_COMPLETED, {
+                        request: request,
+                        exists: false
+                    });
                 }
             });
         } else {
-            report(false);
+            eventBus.trigger(Events.CHECK_FOR_EXISTENCE_COMPLETED, {
+                request: request,
+                exists: false
+            });
         }
     }
 
     function load(request) {
-        const report = function (data, error) {
-            eventBus.trigger(Events.LOADING_COMPLETED, {
-                request: request,
-                response: data || null,
-                error: error || null,
-                sender: instance
-            });
-        };
-
         if (request) {
-            xhrLoader.load({
+            loader.load({
                 request: request,
-                progress: function () {
+                progress: function (data) {
                     eventBus.trigger(Events.LOADING_PROGRESS, {
-                        request: request
+                        request: request,
+                        response: data || null,
+                        error: null,
+                        sender: instance
                     });
                 },
                 success: function (data) {
-                    report(data);
+                    eventBus.trigger(Events.LOADING_COMPLETED, {
+                        request: request,
+                        response: data || null,
+                        error: null,
+                        sender: instance
+                    });
                 },
-                error: function (xhr, statusText, errorText) {
-                    report(
-                        undefined,
-                        new Error(
+                error: function (request, statusText) {
+                    eventBus.trigger(Events.LOADING_COMPLETED, {
+                        request: request,
+                        response: null,
+                        error: new Error(
                             FRAGMENT_LOADER_ERROR_LOADING_FAILURE,
-                            errorText,
+                            'error',
                             statusText
-                        )
-                    );
+                        ),
+                        sender: instance
+                    });
                 }
             });
         } else {
-            report(
-                undefined,
-                new Error(
+            eventBus.trigger(Events.LOADING_COMPLETED, {
+                request: request,
+                response: null,
+                error: new Error(
                     FRAGMENT_LOADER_ERROR_NULL_REQUEST,
-                    FRAGMENT_LOADER_MESSAGE_NULL_REQUEST
-                )
-            );
+                    'request is null'
+                ),
+                sender: instance
+            });
         }
     }
 
     function abort() {
-        if (xhrLoader) {
-            xhrLoader.abort();
+        if (loader) {
+            loader.abort();
         }
     }
 
     function reset() {
-        if (xhrLoader) {
-            xhrLoader.abort();
-            xhrLoader = null;
+        if (loader) {
+            loader.abort();
+            loader = null;
         }
     }
 
