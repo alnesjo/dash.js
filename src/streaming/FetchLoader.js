@@ -31,7 +31,6 @@
 /**
  * Created by robert on 2017-05-10.
  */
-/* jshint esnext: true */
 /* global Headers: false, ProgressEvent: false */
 
 import {HTTPRequest} from './vo/metrics/HTTPRequest';
@@ -49,87 +48,36 @@ function FetchLoader(cfg) {
     const context = this.context;
 
     const log = Debug(context).getInstance().log;
+    const warn = window.console.warn;
     const mediaPlayerModel = MediaPlayerModel(context).getInstance();
 
     const errHandler = cfg.errHandler;
     const metricsModel = cfg.metricsModel;
     const requestModifier = cfg.requestModifier;
 
-    let instance;
-    let retryTimers;
-    let downloadErrorToRequestTypeMap;
-
-    function setup() {
-        retryTimers = [];
-        downloadErrorToRequestTypeMap = {
-            [HTTPRequest.MPD_TYPE]:                         ErrorHandler.DOWNLOAD_ERROR_ID_MANIFEST,
-            [HTTPRequest.XLINK_EXPANSION_TYPE]:             ErrorHandler.DOWNLOAD_ERROR_ID_XLINK,
-            [HTTPRequest.INIT_SEGMENT_TYPE]:                ErrorHandler.DOWNLOAD_ERROR_ID_INITIALIZATION,
-            [HTTPRequest.MEDIA_SEGMENT_TYPE]:               ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT,
-            [HTTPRequest.INDEX_SEGMENT_TYPE]:               ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT,
-            [HTTPRequest.BITSTREAM_SWITCHING_SEGMENT_TYPE]: ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT,
-            [HTTPRequest.OTHER_TYPE]:                       ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT
-        };
-    }
-
-
+    let retryTimers = [];
+    const downloadErrorToRequestTypeMap = {
+        [HTTPRequest.MPD_TYPE]:                         ErrorHandler.DOWNLOAD_ERROR_ID_MANIFEST,
+        [HTTPRequest.XLINK_EXPANSION_TYPE]:             ErrorHandler.DOWNLOAD_ERROR_ID_XLINK,
+        [HTTPRequest.INIT_SEGMENT_TYPE]:                ErrorHandler.DOWNLOAD_ERROR_ID_INITIALIZATION,
+        [HTTPRequest.MEDIA_SEGMENT_TYPE]:               ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT,
+        [HTTPRequest.INDEX_SEGMENT_TYPE]:               ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT,
+        [HTTPRequest.BITSTREAM_SWITCHING_SEGMENT_TYPE]: ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT,
+        [HTTPRequest.OTHER_TYPE]:                       ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT
+    };
 
     function internalLoad(config, remainingAttempts) {
 
         let request = config.request;
+        request.requestStartDate = new Date();
         let traces = [];
         let firstProgress = true;
-        let needFailureReport = true;
-        const requestStartTime = new Date();
-        let lastTraceTime = requestStartTime;
+        let firstChunk = true;
+        let lastTraceTime = request.requestStartDate;
         let lastTraceReceivedCount = 0;
 
-        const handleLoaded = (success, status, responseUrl, responseHeaders) => {
-            needFailureReport = false;
-            request.requestStartDate = requestStartTime;
-            request.requestEndDate = new Date();
-            request.firstByteDate = request.firstByteDate || requestStartTime;
-            if (!request.checkForExistenceOnly) {
-                metricsModel.addHttpRequest(
-                    request.mediaType,
-                    null,
-                    request.type,
-                    request.url,
-                    responseUrl || null,
-                    request.serviceLocation || null,
-                    request.range || null,
-                    request.requestStartDate,
-                    request.firstByteDate,
-                    request.requestEndDate,
-                    status,
-                    request.duration,
-                    responseHeaders,
-                    success ? traces : null
-                );
-            }
-        };
 
-        const onloadend = (status, statusText, responseUrl, responseHeaders) => {
-            if (needFailureReport) {
-                handleLoaded(false, status, responseUrl, responseHeaders);
-                if (remainingAttempts > 0) {
-                    remainingAttempts--;
-                    retryTimers.push(setTimeout(function () {
-                        internalLoad(config, remainingAttempts);
-                    }, mediaPlayerModel.getRetryIntervalForType(request.type)));
-                } else {
-                    errHandler.downloadError(downloadErrorToRequestTypeMap[request.type], request.url, request);
-                    if (config.error) {
-                        config.error(request, 'error', statusText);
-                    }
-                    if (config.complete) {
-                        config.complete(request, statusText);
-                    }
-                }
-            }
-        };
-
-        const progress = (event) => {
+        const progress = (event, data) => {
             const currentTime = new Date();
             if (firstProgress) {
                 firstProgress = false;
@@ -142,6 +90,9 @@ function FetchLoader(cfg) {
                 request.bytesLoaded = event.loaded;
                 request.bytesTotal = event.total;
             }
+            if (event.loaded && firstChunk) {
+                firstChunk = false;
+            }
             traces.push({
                 s: lastTraceTime,
                 d: currentTime.getTime() - lastTraceTime.getTime(),
@@ -150,16 +101,13 @@ function FetchLoader(cfg) {
             lastTraceTime = currentTime;
             lastTraceReceivedCount = event.loaded;
             if (config.progress) {
-                config.progress();
+                config.progress(data);
             }
         };
 
         const fetcher = () => {
             fetch(requestModifier.modifyRequestURL(request.url), (() => {
                 let headers = new Headers();
-                if (request.responseType) {
-                    headers.append('Content-Type', request.responseType);
-                }
                 if (request.range) {
                     headers.append('Range', 'bytes=' + request.range);
                 }
@@ -169,7 +117,6 @@ function FetchLoader(cfg) {
                     mode: mediaPlayerModel.getXHRWithCredentialsForType(request.type)
                 };
             })()).then(({status, statusText, url, headers, body}) => {
-
                 progress(new ProgressEvent('loadstart'));
                 let headersString = '';
                 for (const pair of headers) {
@@ -184,9 +131,7 @@ function FetchLoader(cfg) {
                     reader: body.getReader()
                 };
             }).then(({url, status, statusText, headers, reader}) => {
-                log(url, status, statusText);
-                log(headers);
-                let data = new Uint8Array();
+                let data = new Uint8Array(); // ignore request.responseType?
                 const consume = ({value, done}) => {
                     if (done) {
                         return {
@@ -194,7 +139,26 @@ function FetchLoader(cfg) {
                             status: status,
                             statusText: statusText,
                             headers: headers,
-                            data: data
+                            data: (() => {
+                                if ('' === request.responseType || 'text' === request.responseType) {
+                                    warn('Response type `text\' is not supported.');
+                                    return data;
+                                } else if ('arraybuffer' === request.responseType) {
+                                    return data;
+                                } else if ('blob' === request.responseType) {
+                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
+                                    return data;
+                                } else if ('document' === request.responseType) {
+                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
+                                    return data;
+                                } else if ('json' === request.responseType) {
+                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
+                                    return data;
+                                } else {
+                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
+                                    return data;
+                                }
+                            })()
                         };
                     }
                     progress(new ProgressEvent('progress', {loaded: data.length}));
@@ -209,23 +173,56 @@ function FetchLoader(cfg) {
                 return reader.read().then(consume);
             }).then(({url, status, statusText, headers, data}) => {
                 // Only do stuff here if this fetch was not aborted. How do we keep track of this?
-                progress(new ProgressEvent('load', {loaded: data.length}));
+                let success = false;
+                request.requestEndDate = new Date();
+                request.firstByteDate = request.firstByteDate || request.requestStartDate;
                 if (status >= 200 && status <= 299) {
-                    handleLoaded(true, status, url, headers);
+                    progress(new ProgressEvent('load', {loaded: data.length}), data);
+                    success = true;
                     if (config.success) {
-                        config.success(data, statusText/*, xhr*/);
+                        config.success(data, statusText);
                     }
                     if (config.complete) {
                         config.complete(request, statusText);
                     }
+                } else {
+                    progress(new ProgressEvent('error'));
+                    if (remainingAttempts > 0) {
+                        remainingAttempts--;
+                        retryTimers.push(setTimeout(function () {
+                            internalLoad(config, remainingAttempts);
+                        }, mediaPlayerModel.getRetryIntervalForType(request.type)));
+                    } else {
+                        errHandler.downloadError(downloadErrorToRequestTypeMap[request.type], request.url, request);
+                        if (config.error) {
+                            config.error(request, statusText);
+                        }
+                        if (config.complete) {
+                            config.complete(request, statusText);
+                        }
+                    }
                 }
-                progress(new ProgressEvent('loadend', {loaded: data.length}));
-                onloadend(statusText);
+                progress(new ProgressEvent('loadend', {loaded: data.length}), data);
+                if (!request.checkForExistenceOnly) {
+                    metricsModel.addHttpRequest(
+                        request.mediaType,
+                        null,
+                        request.type,
+                        request.url,
+                        url || null,
+                        request.serviceLocation || null,
+                        request.range || null,
+                        request.requestStartDate,
+                        request.firstByteDate,
+                        request.requestEndDate,
+                        status,
+                        request.duration,
+                        headers,
+                        success ? traces : null
+                    );
+                }
             }).catch((error) => {
                 log(error.message);
-                progress(new ProgressEvent('error'));
-                progress(new ProgressEvent('loadend'));
-                onloadend(undefined);
             });
         };
 
@@ -263,17 +260,13 @@ function FetchLoader(cfg) {
      */
     function abort() {
         // Need to assure that downloads in progress are disposed, even if we can't properly abort them
-        window.console.warn(abort.name, 'is not implemented!');
+        warn(abort.name, 'is not implemented.');
     }
 
-    instance = {
+    return {
         load: load,
         abort: abort
     };
-
-    setup();
-
-    return instance;
 }
 
 FetchLoader.__dashjs_factory_name = 'FetchLoader';
