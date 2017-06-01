@@ -29,7 +29,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-import FetchLoader from './FetchLoader';
+import XHRLoader from './ProgressXHRLoader';
 import HeadRequest from './vo/HeadRequest';
 import Error from './vo/Error';
 import EventBus from './../core/EventBus';
@@ -48,7 +48,7 @@ function FragmentLoader(config) {
         loader;
 
     function setup() {
-        loader = FetchLoader(context).create({
+        loader = XHRLoader(context).create({
             errHandler: config.errHandler,
             metricsModel: config.metricsModel,
             requestModifier: config.requestModifier
@@ -88,41 +88,34 @@ function FragmentLoader(config) {
                 progress: function (data) {
                     eventBus.trigger(Events.LOADING_PROGRESS, {
                         request: request,
-                        response: data || null,
-                        error: null,
-                        sender: instance
+                        sender: instance,
+                        response: data,
+                        error: null
                     });
                 },
-                success: function (data) {
+                success: function () {
                     eventBus.trigger(Events.LOADING_COMPLETED, {
                         request: request,
-                        response: data || null,
-                        error: null,
-                        sender: instance
+                        sender: instance,
+                        response: null,
+                        error: null
                     });
                 },
                 error: function (request, statusText) {
                     eventBus.trigger(Events.LOADING_COMPLETED, {
                         request: request,
+                        sender: instance,
                         response: null,
-                        error: new Error(
-                            FRAGMENT_LOADER_ERROR_LOADING_FAILURE,
-                            'error',
-                            statusText
-                        ),
-                        sender: instance
+                        error: new Error(FRAGMENT_LOADER_ERROR_LOADING_FAILURE, 'Loading failure.', statusText)
                     });
                 }
             });
         } else {
             eventBus.trigger(Events.LOADING_COMPLETED, {
                 request: request,
+                sender: instance,
                 response: null,
-                error: new Error(
-                    FRAGMENT_LOADER_ERROR_NULL_REQUEST,
-                    'request is null'
-                ),
-                sender: instance
+                error: new Error(FRAGMENT_LOADER_ERROR_NULL_REQUEST, 'Missing request.')
             });
         }
     }

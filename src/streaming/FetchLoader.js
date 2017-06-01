@@ -72,10 +72,8 @@ function FetchLoader(cfg) {
         request.requestStartDate = new Date();
         let traces = [];
         let firstProgress = true;
-        let firstChunk = true;
         let lastTraceTime = request.requestStartDate;
         let lastTraceReceivedCount = 0;
-
 
         const progress = (event, data) => {
             const currentTime = new Date();
@@ -89,9 +87,6 @@ function FetchLoader(cfg) {
             if (event.lengthComputable) {
                 request.bytesLoaded = event.loaded;
                 request.bytesTotal = event.total;
-            }
-            if (event.loaded && firstChunk) {
-                firstChunk = false;
             }
             traces.push({
                 s: lastTraceTime,
@@ -131,7 +126,7 @@ function FetchLoader(cfg) {
                     reader: body.getReader()
                 };
             }).then(({url, status, statusText, headers, reader}) => {
-                let data = new Uint8Array(); // ignore request.responseType?
+                let loaded = 0;
                 const consume = ({value, done}) => {
                     if (done) {
                         return {
@@ -139,48 +134,23 @@ function FetchLoader(cfg) {
                             status: status,
                             statusText: statusText,
                             headers: headers,
-                            data: (() => {
-                                if ('' === request.responseType || 'text' === request.responseType) {
-                                    warn('Response type `text\' is not supported.');
-                                    return data;
-                                } else if ('arraybuffer' === request.responseType) {
-                                    return data;
-                                } else if ('blob' === request.responseType) {
-                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
-                                    return data;
-                                } else if ('document' === request.responseType) {
-                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
-                                    return data;
-                                } else if ('json' === request.responseType) {
-                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
-                                    return data;
-                                } else {
-                                    warn('Response type', '`' + request.responseType + '\'', 'is not supported.');
-                                    return data;
-                                }
-                            })()
+                            loaded: loaded
                         };
                     }
-                    progress(new ProgressEvent('progress', {loaded: data.length}));
-                    data = ((a, b) => {
-                        let c = (new Int8Array(a.length + b.length));
-                        c.set(a);
-                        c.set(b, a.length);
-                        return c;
-                    })(data, value);
+                    loaded += value.length;
+                    progress(new ProgressEvent('progress', {loaded: loaded}), value);
                     return reader.read().then(consume);
                 };
                 return reader.read().then(consume);
-            }).then(({url, status, statusText, headers, data}) => {
-                // Only do stuff here if this fetch was not aborted. How do we keep track of this?
+            }).then(({url, status, statusText, headers, loaded}) => {
                 let success = false;
                 request.requestEndDate = new Date();
                 request.firstByteDate = request.firstByteDate || request.requestStartDate;
                 if (status >= 200 && status <= 299) {
-                    progress(new ProgressEvent('load', {loaded: data.length}), data);
+                    progress(new ProgressEvent('load', {loaded: loaded}));
                     success = true;
                     if (config.success) {
-                        config.success(data, statusText);
+                        config.success();
                     }
                     if (config.complete) {
                         config.complete(request, statusText);
@@ -202,7 +172,7 @@ function FetchLoader(cfg) {
                         }
                     }
                 }
-                progress(new ProgressEvent('loadend', {loaded: data.length}), data);
+                progress(new ProgressEvent('loadend', {loaded: loaded}));
                 if (!request.checkForExistenceOnly) {
                     metricsModel.addHttpRequest(
                         request.mediaType,

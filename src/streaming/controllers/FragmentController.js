@@ -99,7 +99,7 @@ function FragmentController(/*config*/) {
         const streamInfo = request.mediaInfo.streamInfo;
 
         if (!bytes || !streamInfo) {
-            log('No ' + request.mediaType + ' bytes to push or stream is inactive.');
+            log('No', request.mediaType, 'bytes to push or stream is inactive.');
             return;
         }
 
