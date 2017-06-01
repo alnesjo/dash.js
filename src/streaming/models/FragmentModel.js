@@ -52,14 +52,17 @@ function FragmentModel(config) {
         scheduleController,
         executedRequests,
         loadingRequests,
-        fragmentLoader;
+        fragmentLoader,
+        slidingDataWindow;
 
     function setup() {
         scheduleController = null;
         fragmentLoader = null;
         executedRequests = [];
         loadingRequests = [];
+        slidingDataWindow = new Uint8Array();
         eventBus.on(Events.LOADING_COMPLETED, onLoadingCompleted, instance);
+        eventBus.on(Events.LOADING_PROGRESS, onLoadingProgress, instance);
     }
 
     function setLoader(value) {
@@ -216,25 +219,66 @@ function FragmentModel(config) {
 
     function onLoadingCompleted(e) {
         if (e.sender !== fragmentLoader) return;
-
         loadingRequests.splice(loadingRequests.indexOf(e.request), 1);
-
         if (e.response && !e.error) {
             executedRequests.push(e.request);
         }
-
         addSchedulingInfoMetrics(e.request, e.error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
+        log('Loading of `' + e.request.url + '\' completed.');
+    }
 
-        eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
-            request: e.request,
-            response: e.response,
-            error: e.error,
-            sender: this
-        });
+    const concat = (a, b) => {
+        let c = (new a.constructor(a.length + b.length));
+        c.set(a);
+        c.set(b, a.length);
+        return c;
+    };
+
+    const headChunk = ((nameDecoder, legalBoxNames) => {
+        const legalBoxName = (name) => legalBoxNames.includes(name);
+        const boxSize = (d) => d[3] + ((d[2] << 8) >>> 0) + ((d[1] << 16) >>> 0) + ((d[0] << 24) >>> 0);
+        const boxName = (d) => nameDecoder.decode(d.slice(4,8));
+        const headBox = (data) => {
+            if (data.length < 8) throw new Error('[' + data + '] is too short to be an MP4 box.');
+            const name = boxName(data);
+            if (!legalBoxName(name)) throw new Error('`' + name + '\' is not a legal MP4 box name.');
+            let size = boxSize(data);
+            if (size > data.length) size = 0;
+            return [data.slice(0,size), data.slice(size)];
+        };
+        return (data) => {
+            let box, chunk, name;
+            for (chunk = new data.constructor();
+                 name = boxName(data), 'moov' !== name || 'mdat' !== name; ) {
+                let len = data.length;
+                [box, data] = headBox(data);
+                if (len === data.length) break;
+                chunk = concat(chunk,box);
+                if (0 === data.length) break;
+            }
+            return [chunk, data];
+        };
+    })(new TextDecoder('utf-8'), ['ftyp','moov','styp','moof','skip','mdat']);
+
+    function onLoadingProgress(e) {
+        if (e.sender !== fragmentLoader) return;
+        if (e.response) {
+            let chunk;
+            slidingDataWindow = concat(slidingDataWindow, e.response);
+            [chunk, slidingDataWindow] = headChunk(slidingDataWindow);
+            if (0 < chunk.length) {
+                eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
+                    request: e.request,
+                    response: chunk,
+                    sender: this
+                });
+            }
+        }
     }
 
     function reset() {
         eventBus.off(Events.LOADING_COMPLETED, onLoadingCompleted, this);
+        eventBus.off(Events.LOADING_PROGRESS, onLoadingProgress, this);
 
         if (fragmentLoader) {
             fragmentLoader.reset();
