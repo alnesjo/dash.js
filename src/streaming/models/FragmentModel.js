@@ -1,3 +1,4 @@
+/* jshint unused: false */
 /**
  * The copyright in this software is being made available under the BSD License,
  * included below. This software may be subject to other third party and contributor
@@ -29,7 +30,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 import EventBus from '../../core/EventBus';
 import Events from '../../core/events/Events';
 import FactoryMaker from '../../core/FactoryMaker';
@@ -60,7 +60,10 @@ function FragmentModel(config) {
         fragmentLoader = null;
         executedRequests = [];
         loadingRequests = [];
-        slidingDataWindow = new Uint8Array();
+        slidingDataWindow = {
+            video: new Uint8Array(),
+            audio: new Uint8Array()
+        };
         eventBus.on(Events.LOADING_COMPLETED, onLoadingCompleted, instance);
         eventBus.on(Events.LOADING_PROGRESS, onLoadingProgress, instance);
     }
@@ -225,54 +228,70 @@ function FragmentModel(config) {
         }
         addSchedulingInfoMetrics(e.request, e.error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
         log('Loading of `' + e.request.url + '\' completed.');
+        let type = e.request.mediaType;
+        let chunk;
+        [chunk, slidingDataWindow[type]] = [slidingDataWindow[type], new (slidingDataWindow[type]).constructor()];
+        if (0 < chunk.length) {
+            eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
+                request: e.request,
+                response: chunk,
+                sender: this
+            });
+        }
     }
 
-    const concat = (a, b) => {
+    function concat(a, b) {
         let c = (new a.constructor(a.length + b.length));
         c.set(a);
         c.set(b, a.length);
         return c;
-    };
+    }
 
-    const headChunk = ((nameDecoder, legalBoxNames) => {
-        const legalBoxName = (name) => legalBoxNames.includes(name);
+    const headChunk = (function (nameDecoder, legalBoxNames, endOfChunkBoxNames) {
         const boxSize = (d) => d[3] + ((d[2] << 8) >>> 0) + ((d[1] << 16) >>> 0) + ((d[0] << 24) >>> 0);
-        const boxName = (d) => nameDecoder.decode(d.slice(4,8));
-        const headBox = (data) => {
-            if (data.length < 8) throw new Error('[' + data + '] is too short to be an MP4 box.');
-            const name = boxName(data);
-            if (!legalBoxName(name)) throw new Error('`' + name + '\' is not a legal MP4 box name.');
-            let size = boxSize(data);
-            if (size > data.length) size = 0;
-            return [data.slice(0,size), data.slice(size)];
-        };
-        return (data) => {
-            let box, chunk, name;
-            for (chunk = new data.constructor();
-                 name = boxName(data), 'moov' !== name || 'mdat' !== name; ) {
-                let len = data.length;
-                [box, data] = headBox(data);
-                if (len === data.length) break;
-                chunk = concat(chunk,box);
-                if (0 === data.length) break;
+        const boxName = (data) => nameDecoder.decode(data.slice(4,8));
+        const legalBox = (data) => legalBoxNames.includes(boxName(data));
+        const endOfChunk = (data) => endOfChunkBoxNames.includes(boxName(data));
+        function headBox(data) {
+            let end = 0;
+            if (8 <= data.length) {
+                if (!legalBox(data)) throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
+                end = boxSize(data) > data.length ? 0 : boxSize(data);
             }
-            return [chunk, data];
+            return [data.slice(0,end), data.slice(end)];
+        }
+        // We actually only want the chunk if it has been completely loaded, thus the repeated concat calls are
+        // inefficient if the chunk has not yet been fully loaded. Improve by preemptively ensuring that a whole chunk
+        // is available.
+        return function (data) {
+            let chunk = new data.constructor();
+            while (0 < data.length) {
+                let box;
+                [box, data] = headBox(data);
+                if (0 === box.length) break;
+                chunk = concat(chunk,box);
+                if (endOfChunk(box)) {
+                    return [chunk, data];
+                }
+            }
+            return [new data.constructor(), concat(chunk, data)];
         };
-    })(new TextDecoder('utf-8'), ['ftyp','moov','styp','moof','skip','mdat']);
+    })(new TextDecoder('utf-8'), ['ftyp','moov','styp','moof','skip','mdat'], ['moov', 'mdat']);
 
     function onLoadingProgress(e) {
         if (e.sender !== fragmentLoader) return;
+        let type = e.request.mediaType;
         if (e.response) {
-            let chunk;
-            slidingDataWindow = concat(slidingDataWindow, e.response);
-            [chunk, slidingDataWindow] = headChunk(slidingDataWindow);
-            if (0 < chunk.length) {
-                eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
-                    request: e.request,
-                    response: chunk,
-                    sender: this
-                });
-            }
+            // let chunk;
+            slidingDataWindow[type] = concat(slidingDataWindow[type], e.response);
+            // [chunk, slidingDataWindow[type]] = headChunk(slidingDataWindow[type]);
+            // if (0 < chunk.length) {
+            //     eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
+            //         request: e.request,
+            //         response: chunk.buffer,
+            //         sender: this
+            //     });
+            // }
         }
     }
 

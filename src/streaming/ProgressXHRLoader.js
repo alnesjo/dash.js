@@ -173,9 +173,11 @@ function XHRLoader(cfg) {
             lastTraceReceivedCount = event.loaded;
 
             if (config.progress) {
-                xhr.response.slice(responseIndex, event.loaded);
+                let buffer = xhr.response && xhr.responseType === 'arraybuffer' ?
+                    xhr.response.slice(responseIndex) : undefined;
+                let data = new Uint8Array(buffer);
                 responseIndex = event.loaded;
-                config.progress(xhr.response);
+                config.progress(data);
             }
         };
 
@@ -224,7 +226,6 @@ function XHRLoader(cfg) {
             let now = new Date().getTime();
             if (isNaN(request.delayLoadingTime) || now >= request.delayLoadingTime) {
                 // no delay - just send xhr
-
                 xhrs.push(xhr);
                 xhr.send();
             } else {

@@ -29,7 +29,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-import XHRLoader from './ProgressXHRLoader';
+import FetchLoader from './FetchLoader';
 import HeadRequest from './vo/HeadRequest';
 import Error from './vo/Error';
 import EventBus from './../core/EventBus';
@@ -48,7 +48,7 @@ function FragmentLoader(config) {
         loader;
 
     function setup() {
-        loader = XHRLoader(context).create({
+        loader = FetchLoader(context).create({
             errHandler: config.errHandler,
             metricsModel: config.metricsModel,
             requestModifier: config.requestModifier
