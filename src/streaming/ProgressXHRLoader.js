@@ -173,10 +173,13 @@ function XHRLoader(cfg) {
             lastTraceReceivedCount = event.loaded;
 
             if (config.progress) {
-                let buffer = xhr.response && xhr.responseType === 'arraybuffer' ?
-                    xhr.response.slice(responseIndex) : undefined;
-                let data = new Uint8Array(buffer);
-                responseIndex = event.loaded;
+                let data;
+                if (xhr.response) {
+                    window.console.assert(xhr.responseType === 'arraybuffer');
+                    let buffer = xhr.response.slice(responseIndex);
+                    data = new Uint8Array(buffer);
+                    responseIndex = event.loaded;
+                }
                 config.progress(data);
             }
         };
@@ -186,7 +189,7 @@ function XHRLoader(cfg) {
                 handleLoaded(true);
 
                 if (config.success) {
-                    config.success();
+                    config.success(xhr.response, xhr.statusText);
                 }
 
                 if (config.complete) {

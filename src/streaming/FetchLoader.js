@@ -75,32 +75,33 @@ function FetchLoader(cfg) {
         let lastTraceTime = request.requestStartDate;
         let lastTraceReceivedCount = 0;
 
-        const progress = (event, data) => {
-            const currentTime = new Date();
-            if (firstProgress) {
-                firstProgress = false;
-                if (!event.lengthComputable ||
-                    (event.lengthComputable && event.total !== event.loaded)) {
-                    request.firstByteDate = currentTime;
+        function fetcher() {
+
+            function progress(event, data) {
+                const currentTime = new Date();
+                if (firstProgress) {
+                    firstProgress = false;
+                    if (!event.lengthComputable ||
+                        (event.lengthComputable && event.total !== event.loaded)) {
+                        request.firstByteDate = currentTime;
+                    }
+                }
+                if (event.lengthComputable) {
+                    request.bytesLoaded = event.loaded;
+                    request.bytesTotal = event.total;
+                }
+                traces.push({
+                    s: lastTraceTime,
+                    d: currentTime.getTime() - lastTraceTime.getTime(),
+                    b: [event.loaded ? event.loaded - lastTraceReceivedCount : 0]
+                });
+                lastTraceTime = currentTime;
+                lastTraceReceivedCount = event.loaded;
+                if (config.progress) {
+                    config.progress(data);
                 }
             }
-            if (event.lengthComputable) {
-                request.bytesLoaded = event.loaded;
-                request.bytesTotal = event.total;
-            }
-            traces.push({
-                s: lastTraceTime,
-                d: currentTime.getTime() - lastTraceTime.getTime(),
-                b: [event.loaded ? event.loaded - lastTraceReceivedCount : 0]
-            });
-            lastTraceTime = currentTime;
-            lastTraceReceivedCount = event.loaded;
-            if (config.progress) {
-                config.progress(data);
-            }
-        };
 
-        const fetcher = () => {
             fetch(requestModifier.modifyRequestURL(request.url), (() => {
                 let headers = new Headers();
                 if (request.range) {
@@ -194,7 +195,7 @@ function FetchLoader(cfg) {
             }).catch((error) => {
                 log(error.message);
             });
-        };
+        }
 
         // Adds the ability to delay single fragment loading time to control buffer.
         let now = new Date().getTime();

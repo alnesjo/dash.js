@@ -88,34 +88,34 @@ function FragmentLoader(config) {
                 progress: function (data) {
                     eventBus.trigger(Events.LOADING_PROGRESS, {
                         request: request,
-                        sender: instance,
                         response: data,
-                        error: null
+                        error: null,
+                        sender: instance
                     });
                 },
                 success: function () {
                     eventBus.trigger(Events.LOADING_COMPLETED, {
                         request: request,
-                        sender: instance,
                         response: null,
-                        error: null
+                        error: null,
+                        sender: instance
                     });
                 },
                 error: function (request, statusText) {
                     eventBus.trigger(Events.LOADING_COMPLETED, {
                         request: request,
-                        sender: instance,
                         response: null,
-                        error: new Error(FRAGMENT_LOADER_ERROR_LOADING_FAILURE, 'Loading failure.', statusText)
+                        error: new Error(FRAGMENT_LOADER_ERROR_LOADING_FAILURE, 'Loading failure.', statusText),
+                        sender: instance
                     });
                 }
             });
         } else {
             eventBus.trigger(Events.LOADING_COMPLETED, {
                 request: request,
-                sender: instance,
                 response: null,
-                error: new Error(FRAGMENT_LOADER_ERROR_NULL_REQUEST, 'Missing request.')
+                error: new Error(FRAGMENT_LOADER_ERROR_NULL_REQUEST, 'Missing request.'),
+                sender: instance
             });
         }
     }
