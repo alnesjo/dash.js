@@ -60,10 +60,7 @@ function FragmentModel(config) {
         fragmentLoader = null;
         executedRequests = [];
         loadingRequests = [];
-        slidingDataWindow = {
-            video: new Uint8Array(),
-            audio: new Uint8Array()
-        };
+        slidingDataWindow = new Map();
         eventBus.on(Events.LOADING_COMPLETED, onLoadingCompleted, instance);
         eventBus.on(Events.LOADING_PROGRESS, onLoadingProgress, instance);
     }
@@ -227,17 +224,60 @@ function FragmentModel(config) {
             executedRequests.push(e.request);
         }
         addSchedulingInfoMetrics(e.request, e.error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
+        let url = e.request.url;
+        let chunk = slidingDataWindow.get(url);
+        slidingDataWindow.delete(url);
+
+        window.console.assert(chunk && 0 === headChunk(chunk)[1].length);
         log('Loading of `' + e.request.url + '\' completed.');
-        let type = e.request.mediaType;
-        let chunk;
-        [chunk, slidingDataWindow[type]] = [slidingDataWindow[type], new (slidingDataWindow[type]).constructor()];
-        if (0 < chunk.length) {
-            eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
-                request: e.request,
-                response: chunk,
-                sender: this
-            });
+        eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
+            request: e.request,
+            response: chunk.buffer,
+            error: e.error,
+            sender: this
+        });
+    }
+
+    const boxSize = (data) => (new DataView(data.slice(0,4).buffer)).getUint32(0,false);
+
+    const boxName = (function (nameDecoder) {
+        return (data) => nameDecoder.decode(data.subarray(4, 8));
+    })(new TextDecoder('utf-8'));
+
+    const legalBox = (function (legalBoxNames) {
+        return (data) => legalBoxNames.includes(boxName(data));
+    })(['ftyp','moov','styp','moof','skip','mdat']);
+
+    const endOfChunk = (function (endOfChunkBoxNames) {
+        return (data) => endOfChunkBoxNames.includes(boxName(data));
+    })(['moov', 'mdat']);
+
+    function headBox(data) {
+        let end = 0;
+        if (8 <= data.length) {
+            if (!legalBox(data)) throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
+            end = boxSize(data) > data.length ? 0 : boxSize(data);
         }
+        return [data.subarray(0,end), data.subarray(end)];
+    }
+
+    function headChunk(data) {
+        let chunk = data.subarray(0,0);
+        let box;
+        do {
+            [box, data] = headBox(data);
+            if (0 < box.length) {
+                // append box to chunk
+                chunk = new data.constructor(data.buffer, 0, chunk.length + box.length);
+            } else {
+                // no box was extracted, but chunk isn't done yet
+                chunk = new data.constructor(data.buffer, 0, 0);
+                data = new data.constructor(data.buffer);
+
+                break;
+            }
+        } while (!endOfChunk(box));
+        return [chunk, data];
     }
 
     function concat(a, b) {
@@ -247,43 +287,12 @@ function FragmentModel(config) {
         return c;
     }
 
-    const headChunk = (function (nameDecoder, legalBoxNames, endOfChunkBoxNames) {
-        const boxSize = (d) => d[3] + ((d[2] << 8) >>> 0) + ((d[1] << 16) >>> 0) + ((d[0] << 24) >>> 0);
-        const boxName = (data) => nameDecoder.decode(data.slice(4,8));
-        const legalBox = (data) => legalBoxNames.includes(boxName(data));
-        const endOfChunk = (data) => endOfChunkBoxNames.includes(boxName(data));
-        function headBox(data) {
-            let end = 0;
-            if (8 <= data.length) {
-                if (!legalBox(data)) throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
-                end = boxSize(data) > data.length ? 0 : boxSize(data);
-            }
-            return [data.slice(0,end), data.slice(end)];
-        }
-        // We actually only want the chunk if it has been completely loaded, thus the repeated concat calls are
-        // inefficient if the chunk has not yet been fully loaded. Improve by preemptively ensuring that a whole chunk
-        // is available.
-        return function (data) {
-            let chunk = new data.constructor();
-            while (0 < data.length) {
-                let box;
-                [box, data] = headBox(data);
-                if (0 === box.length) break;
-                chunk = concat(chunk,box);
-                if (endOfChunk(box)) {
-                    return [chunk, data];
-                }
-            }
-            return [new data.constructor(), concat(chunk, data)];
-        };
-    })(new TextDecoder('utf-8'), ['ftyp','moov','styp','moof','skip','mdat'], ['moov', 'mdat']);
-
     function onLoadingProgress(e) {
         if (e.sender !== fragmentLoader) return;
-        let type = e.request.mediaType;
         if (e.response) {
+            let url = e.request.url;
+            slidingDataWindow.set(url, concat(slidingDataWindow.get(url) || new Uint8Array(), e.response));
             // let chunk;
-            slidingDataWindow[type] = concat(slidingDataWindow[type], e.response);
             // [chunk, slidingDataWindow[type]] = headChunk(slidingDataWindow[type]);
             // if (0 < chunk.length) {
             //     eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
