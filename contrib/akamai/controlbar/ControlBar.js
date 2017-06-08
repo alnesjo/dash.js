@@ -89,7 +89,7 @@ var ControlBar = function (dashjsMediaPlayer, displayUTCTimeCodes) {
                 seekbar.value = player.time();
             }
             let now = (new Date()).getTime() * 0.001;
-            console.log("Live delay: " + (now - player.timeAsUTC()));
+            window.console.log("Live delay: " + (now - player.timeAsUTC()));
         },
 
 //************************************************************************************

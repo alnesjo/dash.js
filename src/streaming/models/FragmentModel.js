@@ -52,15 +52,13 @@ function FragmentModel(config) {
         scheduleController,
         executedRequests,
         loadingRequests,
-        fragmentLoader,
-        slidingDataWindow;
+        fragmentLoader;
 
     function setup() {
         scheduleController = null;
         fragmentLoader = null;
         executedRequests = [];
         loadingRequests = [];
-        slidingDataWindow = new Map();
         eventBus.on(Events.LOADING_COMPLETED, onLoadingCompleted, instance);
         eventBus.on(Events.LOADING_PROGRESS, onLoadingProgress, instance);
     }
@@ -217,90 +215,26 @@ function FragmentModel(config) {
         metricsModel.addRequestsQueue(request.mediaType, loadingRequests, executedRequests);
     }
 
-    function onLoadingCompleted(e) {
-        if (e.sender !== fragmentLoader) return;
-        loadingRequests.splice(loadingRequests.indexOf(e.request), 1);
-        if (e.response && !e.error) {
-            executedRequests.push(e.request);
-        }
-        addSchedulingInfoMetrics(e.request, e.error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
-        let url = e.request.url;
-        let chunk = slidingDataWindow.get(url);
-        slidingDataWindow.delete(url);
-
-        window.console.assert(chunk && 0 === headChunk(chunk)[1].length);
-        log('Loading of `' + e.request.url + '\' completed.');
-        eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
-            request: e.request,
-            response: chunk.buffer,
-            error: e.error,
-            sender: this
-        });
+    function onLoadingCompleted({request, response, error, sender}) {
+        if (sender !== fragmentLoader) return;
+        // Do nothing
     }
 
-    const boxSize = (data) => (new DataView(data.slice(0,4).buffer)).getUint32(0,false);
-
-    const boxName = (function (nameDecoder) {
-        return (data) => nameDecoder.decode(data.subarray(4, 8));
-    })(new TextDecoder('utf-8'));
-
-    const legalBox = (function (legalBoxNames) {
-        return (data) => legalBoxNames.includes(boxName(data));
-    })(['ftyp','moov','styp','moof','skip','mdat']);
-
-    const endOfChunk = (function (endOfChunkBoxNames) {
-        return (data) => endOfChunkBoxNames.includes(boxName(data));
-    })(['moov', 'mdat']);
-
-    function headBox(data) {
-        let end = 0;
-        if (8 <= data.length) {
-            if (!legalBox(data)) throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
-            end = boxSize(data) > data.length ? 0 : boxSize(data);
-        }
-        return [data.subarray(0,end), data.subarray(end)];
-    }
-
-    function headChunk(data) {
-        let chunk = data.subarray(0,0);
-        let box;
-        do {
-            [box, data] = headBox(data);
-            if (0 < box.length) {
-                // append box to chunk
-                chunk = new data.constructor(data.buffer, 0, chunk.length + box.length);
-            } else {
-                // no box was extracted, but chunk isn't done yet
-                chunk = new data.constructor(data.buffer, 0, 0);
-                data = new data.constructor(data.buffer);
-
-                break;
+    function onLoadingProgress({request, response, error, sender}) {
+        if (sender !== fragmentLoader) return;
+        if (-1 !== loadingRequests.indexOf(request)) { // First chunk of request
+            loadingRequests.splice(loadingRequests.indexOf(request), 1);
+            if (response && !error) {
+                executedRequests.push(request);
             }
-        } while (!endOfChunk(box));
-        return [chunk, data];
-    }
-
-    function concat(a, b) {
-        let c = (new a.constructor(a.length + b.length));
-        c.set(a);
-        c.set(b, a.length);
-        return c;
-    }
-
-    function onLoadingProgress(e) {
-        if (e.sender !== fragmentLoader) return;
-        if (e.response) {
-            let url = e.request.url;
-            slidingDataWindow.set(url, concat(slidingDataWindow.get(url) || new Uint8Array(), e.response));
-            // let chunk;
-            // [chunk, slidingDataWindow[type]] = headChunk(slidingDataWindow[type]);
-            // if (0 < chunk.length) {
-            //     eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
-            //         request: e.request,
-            //         response: chunk.buffer,
-            //         sender: this
-            //     });
-            // }
+            addSchedulingInfoMetrics(request, error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
+        }
+        if (response) {
+            eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
+                request: request,
+                response: response,
+                sender: this
+            });
         }
     }
 
