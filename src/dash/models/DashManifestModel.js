@@ -619,13 +619,14 @@ function DashManifestModel() {
         mpd.manifest = manifest;
 
         if (manifest.hasOwnProperty('availabilityStartTime')) {
-            let availabilityTimeOffsetMs = 0;
-            if (manifest.hasOwnProperty('BaseURL') && manifest.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
-                availabilityTimeOffsetMs = manifest.BaseURL.availabilityTimeOffset * 1000;
-            }
-            mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime() - availabilityTimeOffsetMs);
+            mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime());
         } else {
             mpd.availabilityStartTime = new Date(manifest.loadedTime.getTime());
+        }
+
+        if (manifest.hasOwnProperty('BaseURL') && manifest.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
+            // Rather than keeping track of the offset everywhere just modify AST directly.
+            mpd.availabilityStartTime = new Date(mpd.availabilityStartTime - 1000 * mpd.manifest.BaseURL.availabilityTimeOffset);
         }
 
         if (manifest.hasOwnProperty('availabilityEndTime')) {
