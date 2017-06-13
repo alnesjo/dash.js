@@ -178,6 +178,9 @@ function DashAdapter() {
         manifestInfo.DVRWindowSize = mpd.timeShiftBufferDepth;
         manifestInfo.loadedTime = mpd.manifest.loadedTime;
         manifestInfo.availableFrom = mpd.availabilityStartTime;
+        if (mpd.manifest.hasOwnProperty('BaseURL') && mpd.manifest.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
+            manifestInfo.availabilityOffset = mpd.manifest.BaseURL.availabilityTimeOffset;
+        }
         manifestInfo.minBufferTime = mpd.manifest.minBufferTime;
         manifestInfo.maxFragmentDuration = mpd.maxSegmentDuration;
         manifestInfo.duration = dashManifestModel.getDuration(manifest);
