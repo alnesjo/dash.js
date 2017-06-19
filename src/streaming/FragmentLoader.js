@@ -201,12 +201,14 @@ function FragmentLoader(config) {
     }
 
     function abort() {
+        slidingDataWindow.clear();
         if (loader) {
             loader.abort();
         }
     }
 
     function reset() {
+        slidingDataWindow.clear();
         if (loader) {
             loader.abort();
             loader = null;

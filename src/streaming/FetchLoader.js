@@ -72,6 +72,7 @@ function FetchLoader(cfg) {
         request.requestStartDate = new Date();
         let traces = [];
         let firstProgress = true;
+        let firstDataLoaded = false;
         let lastTraceTime = request.requestStartDate;
         let lastTraceReceivedCount = 0;
 
@@ -90,11 +91,19 @@ function FetchLoader(cfg) {
                     request.bytesLoaded = event.loaded;
                     request.bytesTotal = event.total;
                 }
-                traces.push({
-                    s: lastTraceTime,
-                    d: currentTime.getTime() - lastTraceTime.getTime(),
-                    b: [event.loaded ? event.loaded - lastTraceReceivedCount : 0]
-                });
+                if (!firstDataLoaded) {
+                    // If the segment is loaded partially (BaseURL.availabilityTimeComplete is false), subsequent loads
+                    // must not be accounted for in bandwidth estimation! Should also be feasible for complete segments.
+                    if (event.loaded) {
+                        request.requestEndDate = new Date();
+                        firstDataLoaded = true;
+                    }
+                    traces.push({
+                        s: lastTraceTime,
+                        d: currentTime.getTime() - lastTraceTime.getTime(),
+                        b: [event.loaded ? event.loaded - lastTraceReceivedCount : 0]
+                    });
+                }
                 lastTraceTime = currentTime;
                 lastTraceReceivedCount = event.loaded;
                 if (config.progress) {
@@ -145,7 +154,6 @@ function FetchLoader(cfg) {
                 return reader.read().then(consume);
             }).then(({url, status, statusText, headers, loaded}) => {
                 let success = false;
-                request.requestEndDate = new Date();
                 request.firstByteDate = request.firstByteDate || request.requestStartDate;
                 if (status >= 200 && status <= 299) {
                     progress(new ProgressEvent('load', {loaded: loaded}));

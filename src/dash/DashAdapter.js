@@ -179,7 +179,10 @@ function DashAdapter() {
         manifestInfo.loadedTime = mpd.manifest.loadedTime;
         manifestInfo.availableFrom = mpd.availabilityStartTime;
         if (mpd.manifest.hasOwnProperty('BaseURL') && mpd.manifest.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
-            manifestInfo.availabilityOffset = mpd.manifest.BaseURL.availabilityTimeOffset;
+            manifestInfo.availabilityTimeOffset = mpd.manifest.BaseURL.availabilityTimeOffset;
+        }
+        if (mpd.manifest.hasOwnProperty('BaseURL') && mpd.manifest.BaseURL.hasOwnProperty('availabilityTimeComplete')) {
+            manifestInfo.availabilityTimeComplete = mpd.manifest.BaseURL.availabilityTimeComplete !== 'false';
         }
         manifestInfo.minBufferTime = mpd.manifest.minBufferTime;
         manifestInfo.maxFragmentDuration = mpd.maxSegmentDuration;

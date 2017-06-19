@@ -2034,7 +2034,7 @@ function MediaPlayer() {
             return 0;
         }
         availableFrom = metric.manifestInfo.availableFrom.getTime() / 1000;
-        utcValue = valToConvert + (availableFrom + metric.range.start) + (metric.manifestInfo.availabilityOffset || 0);
+        utcValue = valToConvert + (availableFrom + metric.range.start) + (metric.manifestInfo.availabilityTimeOffset || 0);
         return utcValue;
     }
 

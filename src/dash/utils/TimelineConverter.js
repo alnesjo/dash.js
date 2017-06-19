@@ -142,8 +142,8 @@ function TimelineConverter() {
     function calcSegmentAvailabilityRange(representation, isDynamic) {
 
         // Static Range Finder
-        const period = representation.adaptation.period;
-        const range = { start: period.start, end: period.start + period.duration };
+        var period = representation.adaptation.period;
+        var range = { start: period.start, end: period.start + period.duration };
         if (!isDynamic) return range;
 
         if (!isClientServerTimeSyncCompleted && representation.segmentAvailabilityRange) {
@@ -151,9 +151,22 @@ function TimelineConverter() {
         }
 
         //Dyanmic Range Finder
-        const d = representation.segmentDuration || (representation.segments && representation.segments.length ? representation.segments[representation.segments.length - 1].duration : 0);
-        const now = calcPresentationTimeFromWallTime(new Date(), period);
-        const periodEnd = period.start + period.duration;
+        var [availabilityTimeComplete, availabilityTimeOffset] = (function (m) {
+            var [availabilityTimeComplete, availabilityTimeOffset] = [true, 0];
+            if (m.hasOwnProperty('BaseURL')) {
+                if (m.BaseURL.hasOwnProperty('availabilityTimeComplete')) {
+                    availabilityTimeComplete = m.BaseURL.availabilityTimeComplete;
+                }
+                if (m.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
+                    availabilityTimeOffset = m.BaseURL.availabilityTimeOffset;
+                }
+            }
+            return [availabilityTimeComplete !== 'false', availabilityTimeOffset];
+        })(representation.adaptation.period.mpd.manifest);
+        var d = representation.segmentDuration || (representation.segments && representation.segments.length ? representation.segments[representation.segments.length - 1].duration : 0);
+        d = availabilityTimeComplete ? d : d - availabilityTimeOffset;
+        var now = calcPresentationTimeFromWallTime(new Date(), period);
+        var periodEnd = period.start + period.duration;
         range.start = Math.max((now - period.mpd.timeShiftBufferDepth), period.start);
         range.end = now >= periodEnd && now - d < periodEnd ? periodEnd - d : now - d;
 
