@@ -37,7 +37,8 @@ class ManifestInfo {
         this.DVRWindowSize = NaN;
         this.loadedTime = null;
         this.availableFrom = null;
-        this.availabilityOffset = NaN;
+        this.availabilityTimeOffset = 0;
+        this.availabilityTimeComplete = true;
         this.minBufferTime = NaN;
         this.duration = NaN;
         this.isDynamic = false;

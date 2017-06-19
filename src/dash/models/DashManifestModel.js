@@ -625,7 +625,7 @@ function DashManifestModel() {
         }
 
         if (manifest.hasOwnProperty('BaseURL') && manifest.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
-            // Rather than keeping track of the offset everywhere just modify AST directly.
+            // Rather than keeping track of the offset everywhere just modify AST directly and remember that it is the modified AST!
             mpd.availabilityStartTime = new Date(mpd.availabilityStartTime - 1000 * mpd.manifest.BaseURL.availabilityTimeOffset);
         }
 
