@@ -112,14 +112,8 @@ function PlaybackController() {
         if (element) {
             element.autoplay = true;
             const p = element.play();
-            setLiveStartTime(new Date() * 0.001 - 2);
             if (p && (typeof Promise !== 'undefined') && (p instanceof Promise)) {
-                p.then(function () {
-                    // var mi = streamInfo.manifestInfo;
-                    // var chunkDuration = mi.availabilityTimeComplete ? mi.duration : mi.duration - mi.availabilityTimeOffset;
-                    // var liveEdge = new Date() * 0.001 - chunkDuration;
-                    // seek(liveEdge);
-                }).catch(function (e) {
+                p.catch(function (e) {
                     if (e.name === 'NotAllowedError') {
                         eventBus.trigger(Events.PLAYBACK_NOT_ALLOWED);
                     }
