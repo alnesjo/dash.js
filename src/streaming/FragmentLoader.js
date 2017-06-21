@@ -35,7 +35,6 @@ import Error from './vo/Error';
 import EventBus from './../core/EventBus';
 import Events from './../core/events/Events';
 import FactoryMaker from '../core/FactoryMaker';
-import Debug from '../core/Debug';
 
 const FRAGMENT_LOADER_ERROR_LOADING_FAILURE = 1;
 const FRAGMENT_LOADER_ERROR_NULL_REQUEST = 2;
@@ -44,12 +43,9 @@ function FragmentLoader(config) {
 
     const context = this.context;
     const eventBus = EventBus(context).getInstance();
-    const log = Debug(context).getInstance().log;
-    const assert = window.console.assert;
 
     let instance,
-        loader,
-        slidingDataWindow;
+        loader;
 
     function setup() {
         loader = FetchLoader(context).create({
@@ -57,7 +53,6 @@ function FragmentLoader(config) {
             metricsModel: config.metricsModel,
             requestModifier: config.requestModifier
         });
-        slidingDataWindow = new Map();
     }
 
     function checkForExistence(request) {
@@ -86,94 +81,19 @@ function FragmentLoader(config) {
         }
     }
 
-    const boxSize = (data) => (new DataView(data.slice(0,4).buffer)).getUint32(0,false);
-
-    const boxName = (function (nameDecoder) {
-        return (data) => nameDecoder.decode(data.subarray(4, 8));
-    })(new TextDecoder('utf-8'));
-
-    const legalBox = (function (legalBoxNames) {
-        return (data) => legalBoxNames.includes(boxName(data));
-    })(['ftyp','moov','styp','moof','skip','mdat']);
-
-    const endOfChunk = (function (endOfChunkBoxNames) {
-        return (data) => endOfChunkBoxNames.includes(boxName(data));
-    })(['moov', 'mdat']);
-
-    function headBox(data) {
-        let end = 0;
-        if (8 <= data.length) {
-            if (!legalBox(data)) throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
-            end = boxSize(data) > data.length ? 0 : boxSize(data);
-        }
-        return [data.subarray(0,end), data.subarray(end)];
-    }
-
-    // function headChunk(data) {
-    //     let [chunk, box, rest] = [data.subarray(0,0), data.subarray(0,0), data.subarray(0)];
-    //     while (true) {
-    //         [box, rest] = headBox(rest);
-    //         if (0 < box.length) { // append box to chunk
-    //             let [end, done] = [chunk.length + box.length, endOfChunk(box)];
-    //             [chunk, box] = [data.subarray(0, end), data.subarray(end, 0)];
-    //             if (done) break;
-    //         } else { // no box was extracted, but chunk isn't done yet
-    //             [chunk, rest] = [data.subarray(0,0), data.subarray(0)];
-    //             break;
-    //         }
-    //     }
-    //     assert([chunk, rest].map(a => a.length).reduce((a, b) => a + b, 0) === data.length);
-    //     return [chunk, rest];
-    // }
-
-    function headChunk(data) {
-        let end = 0;
-        while (true) {
-            let box = headBox(data.subarray(end))[0];
-            if (0 < box.length) { // append box to chunk
-                end += box.length;
-                if (endOfChunk(box)) break;
-            } else { // no box was extracted, but chunk isn't done yet
-                end = 0;
-                break;
-            }
-        }
-        return [data.subarray(0,end), data.subarray(end)];
-    }
-
-    function concat(a, b) {
-        let c = new a.constructor(a.length + b.length);
-        c.set(a);
-        c.set(b, a.length);
-        return c;
-    }
-
     function load(request) {
         if (request) {
             loader.load({
                 request: request,
-                progress: function (response) {
-                    if (response) {
-                        let data = concat(slidingDataWindow.get(request.url) || new Uint8Array(), response);
-                        for (let chunk; [chunk, data] = headChunk(data), (0 < chunk.length); ) {
-                            log(request.mediaType, request.startTime, 'progress (' + chunk.length + ' bytes) after',
-                                ((new Date() - request.requestStartDate) * 0.001).toFixed(2), 'seconds.');
-                            eventBus.trigger(Events.LOADING_PROGRESS, {
-                                request: request,
-                                response: chunk,
-                                error: null,
-                                sender: instance
-                            });
-                        }
-                        slidingDataWindow.set(request.url, data);
-                    }
+                progress: function (chunk) {
+                    eventBus.trigger(Events.LOADING_PROGRESS, {
+                        request: request,
+                        response: chunk,
+                        error: null,
+                        sender: instance
+                    });
                 },
                 success: function () {
-                    let data = slidingDataWindow.get(request.url);
-                    assert([headChunk, headBox, boxName, boxSize]); // Hack to work around optimization while debugging
-                    assert(0 === data.length);
-                    slidingDataWindow.delete(request.url);
-                    log(request.mediaType, request.startTime, 'success.');
                     eventBus.trigger(Events.LOADING_COMPLETED, {
                         request: request,
                         response: null,
@@ -201,14 +121,12 @@ function FragmentLoader(config) {
     }
 
     function abort() {
-        slidingDataWindow.clear();
         if (loader) {
             loader.abort();
         }
     }
 
     function reset() {
-        slidingDataWindow.clear();
         if (loader) {
             loader.abort();
             loader = null;
