@@ -320,15 +320,24 @@ function ScheduleController(config) {
         }
     }
 
+
+
     function setLiveEdgeSeekTarget() {
         const liveEdge = LiveEdgeFinder(context).getInstance().getLiveEdge();
         const dvrWindowSize = currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2;
-        const startTime = liveEdge - playbackController.computeLiveDelay(currentRepresentationInfo.fragmentDuration, dvrWindowSize);
+        const chunkDuration = (function (representationInfo) {
+            const availabilityTimeComplete = representationInfo.mediaInfo.streamInfo.manifestInfo.availabilityTimeComplete;
+            const availabilityTimeOffset = representationInfo.mediaInfo.streamInfo.manifestInfo.availabilityTimeOffset;
+            const segmentDuration = representationInfo.fragmentDuration;
+            return availabilityTimeComplete ? segmentDuration : segmentDuration - availabilityTimeOffset;
+        })(currentRepresentationInfo);
+        const startTime = liveEdge - playbackController.computeLiveDelay(chunkDuration, dvrWindowSize);
         const request = adapter.getFragmentRequestForTime(streamProcessor, currentRepresentationInfo, startTime, {ignoreIsFinished: true});
         seekTarget = playbackController.getLiveStartTime();
         if (isNaN(seekTarget) || request.startTime > seekTarget) {
-            playbackController.setLiveStartTime(request.startTime);
-            seekTarget = request.startTime;
+            playbackController.setLiveStartTime(startTime);
+            //playbackController.setLiveStartTime(new Date() * 0.001);
+            seekTarget = startTime;
         }
 
         const manifestUpdateInfo = dashMetrics.getCurrentManifestUpdate(metricsModel.getMetricsFor('stream'));
