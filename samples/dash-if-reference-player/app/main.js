@@ -236,7 +236,7 @@ app.controller('DashController', function($scope, sources, contributors) {
     $scope.player.on(dashjs.MediaPlayer.events.PLAYBACK_TIME_UPDATED, function(e) {
         let now = new Date() * 0.001;
         let ptime = $scope.player.timeAsUTC();
-        window.console.log("Live delay:", (now - ptime).toFixed(3));
+        window.console.log('Live delay is', (now - ptime).toFixed(3), 'seconds at playback time', ptime, '.');
     }, $scope);
 
     ////////////////////////////////////////
