@@ -189,6 +189,8 @@ app.controller('DashController', function($scope, sources, contributors) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
     }
     $scope.player.setLiveDelayFragmentCount(0);
+    $scope.player.setFragmentLoaderRetryAttempts(10);
+    $scope.player.setFragmentLoaderRetryInterval(100);
 
     $scope.controlbar = new ControlBar($scope.player);
     $scope.controlbar.initialize();
@@ -229,6 +231,12 @@ app.controller('DashController', function($scope, sources, contributors) {
             $scope.player.getActiveStream().getStreamInfo().isLast) {
             $scope.doLoad();
         }
+    }, $scope);
+
+    $scope.player.on(dashjs.MediaPlayer.events.PLAYBACK_TIME_UPDATED, function(e) {
+        let now = new Date() * 0.001;
+        let ptime = $scope.player.timeAsUTC();
+        window.console.log("Live delay:", (now - ptime).toFixed(3));
     }, $scope);
 
     ////////////////////////////////////////
