@@ -88,8 +88,6 @@ var ControlBar = function (dashjsMediaPlayer, displayUTCTimeCodes) {
                 setTime(displayUTCTimeCodes ? player.timeAsUTC() : player.time());
                 seekbar.value = player.time();
             }
-            let now = (new Date()).getTime() * 0.001;
-            window.console.log("Live delay: " + (now - player.timeAsUTC()));
         },
 
 //************************************************************************************
@@ -102,7 +100,7 @@ var ControlBar = function (dashjsMediaPlayer, displayUTCTimeCodes) {
                 span.classList.remove('icon-mute-off');
                 span.classList.add('icon-mute-on');
             } else {
-                span.classList.remove('icon-mute-on')
+                span.classList.remove('icon-mute-on');
                 span.classList.add('icon-mute-off');
             }
         },
