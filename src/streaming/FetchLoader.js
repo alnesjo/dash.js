@@ -38,6 +38,7 @@ import FactoryMaker from '../core/FactoryMaker';
 import MediaPlayerModel from './models/MediaPlayerModel';
 import ErrorHandler from './utils/ErrorHandler.js';
 import Debug from '../core/Debug';
+import ISOBoxer from 'codem-isoboxer';
 
 /**
  * @module FetchLoader
@@ -74,53 +75,53 @@ function FetchLoader(cfg) {
             request.requestStartDate = new Date();
 
             const progress = (function () {
-                const boxNameDecoder = new TextDecoder('utf-8');
-                const legalBoxNames = ['ftyp','moov','styp','moof','skip','mdat'];
-                const endOfChunkBoxNames = ['moov', 'mdat'];
-
-                function boxSize(data) {
-                    return new DataView(data.slice(0,4).buffer).getUint32(0,false);
-                }
-
-                function boxName(data) {
-                    return boxNameDecoder.decode(data.subarray(4, 8));
-                }
-
-                function legalBox(data) {
-                    return legalBoxNames.includes(boxName(data));
-                }
-
-                function endOfChunk(data) {
-                    return endOfChunkBoxNames.includes(boxName(data));
-                }
-
-                function headBox(data) {
-                    let end = 0;
-                    if (8 <= data.length) {
-                        if (legalBox(data)) {
-                            let size = boxSize(data);
-                            end = size > data.length ? 0 : size;
-                        } else {
-                            throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
-                        }
-                    }
-                    return [data.subarray(0,end), data.subarray(end)];
-                }
-
-                function headChunk(data) {
-                    let end = 0;
-                    while (true) {
-                        let box = headBox(data.subarray(end))[0];
-                        if (0 < box.length) { // append box to chunk
-                            end += box.length;
-                            if (endOfChunk(box)) break;
-                        } else { // no box was extracted, but chunk isn't done yet
-                            end = 0;
-                            break;
-                        }
-                    }
-                    return [data.subarray(0,end), data.subarray(end)];
-                }
+                // const boxNameDecoder = new TextDecoder('utf-8');
+                // const legalBoxNames = ['ftyp','moov','styp','moof','skip','mdat','free','sidx'];
+                // const endOfChunkBoxNames = ['moov', 'mdat'];
+                //
+                // function boxSize(data) {
+                //     return new DataView(data.slice(0,4).buffer).getUint32(0,false);
+                // }
+                //
+                // function boxName(data) {
+                //     return boxNameDecoder.decode(data.subarray(4, 8));
+                // }
+                //
+                // function legalBox(data) {
+                //     return legalBoxNames.includes(boxName(data));
+                // }
+                //
+                // function endOfChunk(data) {
+                //     return endOfChunkBoxNames.includes(boxName(data));
+                // }
+                //
+                // function headBox(data) {
+                //     let end = 0;
+                //     if (8 <= data.length) {
+                //         if (legalBox(data)) {
+                //             let size = boxSize(data);
+                //             end = size > data.length ? 0 : size;
+                //         } else {
+                //             throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
+                //         }
+                //     }
+                //     return [data.subarray(0,end), data.subarray(end)];
+                // }
+                //
+                // function headChunk(data) {
+                //     let end = 0;
+                //     while (true) {
+                //         let box = headBox(data.subarray(end))[0];
+                //         if (0 < box.length) { // append box to chunk
+                //             end += box.length;
+                //             if (endOfChunk(box)) break;
+                //         } else { // no box was extracted, but chunk isn't done yet
+                //             end = 0;
+                //             break;
+                //         }
+                //     }
+                //     return [data.subarray(0,end), data.subarray(end)];
+                // }
 
                 function concat(a, b) {
                     let c = new a.constructor(a.length + b.length);
@@ -133,7 +134,7 @@ function FetchLoader(cfg) {
                 let [firstProgress, firstChunkLoaded] = [true, false];
                 let [lastTraceDate, lastTraceReceivedCount] = [request.requestStartDate, 0];
 
-                return function progress(event, newData) {
+                return function (event, newData) {
                     const currentDate = new Date();
                     let data = newData ? concat(slidingData, newData) : slidingData;
                     if (firstProgress) {
@@ -150,20 +151,77 @@ function FetchLoader(cfg) {
                             b: [event.loaded ? event.loaded - lastTraceReceivedCount : 0]
                         });
                     }
-                    for (let chunk; [chunk, data] = headChunk(data), (0 < chunk.length); ) {
-                        log(request.mediaType, request.startTime, 'progress (' + chunk.length + ' bytes) after',
-                            ((new Date() - request.requestStartDate) * 0.001).toFixed(2), 'seconds.');
+                    let boxes = ISOBoxer.parseBuffer(data.buffer).boxes;
+                    let end = 0;
+                    for (let i = 0; i < boxes.length; i++) {
+                        if (boxes[i]._incomplete) {
+                            break;
+                        }
+                        if (['moov', 'mdat'].includes(boxes[i].type)) {
+                            end = boxes[i]._offset + boxes[i].size;
+                        }
+                    }
+                    //let end = boxes[idx]._cursor.offset;
+                    let chunk;
+                    [chunk, data] = [data.subarray(0, end), data.subarray(end)];
+                    if (0 < chunk.length) {
+                        if (0 < data.length) {
+                            // TODO Since the server only yields whole boxes, we are in progress of loading a box, i.e. server is currently delivering this chunk at full rate
+                        }
                         if (!firstChunkLoaded) {
                             firstChunkLoaded = true;
-                            request.requestEndDate = currentDate;
+                            let availabilityTimeComplete = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeComplete;
+                            let availabilityTimeOffset = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeOffset;
+                            let remainingMediaDuration = availabilityTimeComplete ? 0 : availabilityTimeOffset;
+                            let remainingRatio = remainingMediaDuration / (request.duration - remainingMediaDuration);
+                            let remainingDownloadDuration = remainingRatio * (currentDate - request.requestStartDate);
+                            let remainingBytes = event.loaded ? remainingRatio * event.loaded : 0;
+                            request.requestEndDate = new Date(currentDate.getTime() + remainingDownloadDuration);
+                            traces.push({
+                                s: currentDate,
+                                d: remainingDownloadDuration,
+                                b: [remainingBytes]
+                            });
                         }
                         if (config.progress) {
                             config.progress(chunk);
                         }
                     }
+
+                    // TODO Remove this and parsing functions
+                    // for (let chunk; [chunk, data] = headChunk(data), (0 < chunk.length); ) {
+                    //     log(request.mediaType, request.startTime, 'progress (' + chunk.length + ' bytes) after',
+                    //         ((currentDate - request.requestStartDate) * 0.001).toFixed(2), 'seconds.');
+                    //     if (!firstChunkLoaded) {
+                    //         firstChunkLoaded = true;
+                    //         let availabilityTimeComplete = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeComplete;
+                    //         let availabilityTimeOffset = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeOffset;
+                    //         let remainingMediaDuration = availabilityTimeComplete ? 0 : availabilityTimeOffset;
+                    //         let remainingRatio = remainingMediaDuration / (request.duration - remainingMediaDuration);
+                    //         let remainingDownloadDuration = remainingRatio * (currentDate - request.requestStartDate);
+                    //         let remainingBytes = event.loaded ? remainingRatio * event.loaded : 0;
+                    //         request.requestEndDate = new Date(currentDate.getTime() + remainingDownloadDuration);
+                    //         traces.push({
+                    //             s: currentDate,
+                    //             d: remainingDownloadDuration,
+                    //             b: [remainingBytes]
+                    //         });
+                    //     }
+                    //     if (config.progress) {
+                    //         config.progress(chunk);
+                    //     }
+                    // }
                     if (event.lengthComputable) {
                         request.bytesLoaded = event.loaded;
                         request.bytesTotal = event.total;
+                        const megabytes = (bytes) => (bytes / (1024 * 1024)).toPrecision(3) + 'MB';
+                        const percent = (num) => (100 * num).toPrecision(3) + '%';
+                        let approximatedSize = traces.reduce((a,b) => a + b.b[0], 0);
+                        let actualSize = event.total;
+                        let error = Math.abs(actualSize - approximatedSize) / actualSize;
+                        log('Total size approximated as', megabytes(approximatedSize),
+                            'but was actually', megabytes(actualSize), '.',
+                            'Error:', percent(error), '.');
                     }
                     slidingData = data;
                     lastTraceDate = currentDate;
@@ -215,12 +273,12 @@ function FetchLoader(cfg) {
             }).then(({url, status, statusText, headers, loaded}) => {
                 let success = false;
                 if (status >= 200 && status <= 299) {
+                    success = true;
                     progress(new ProgressEvent('load', {
                         lengthComputable: true,
                         loaded: loaded,
                         total: loaded
                     }));
-                    success = true;
                     if (config.success) {
                         config.success();
                     }
