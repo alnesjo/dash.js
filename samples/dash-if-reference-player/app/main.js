@@ -21,7 +21,7 @@ angular.module('DashContributorsService', ['ngResource']).factory('contributors'
 
 app.controller('DashController', function($scope, sources, contributors) {
 
-    $scope.selectedItem = {url:"http://localhost:8059/livesim/chunkdur_1/ato_5/testpic_6s/Manifest.mpd"};
+    $scope.selectedItem = {url:'http://localhost:8059/livesim/chunkdur_1/ato_7/testpic3_8s/Manifest.mpd'};
 
     sources.query(function (data) {
         $scope.availableStreams = data.items;
@@ -234,9 +234,9 @@ app.controller('DashController', function($scope, sources, contributors) {
     }, $scope);
 
     $scope.player.on(dashjs.MediaPlayer.events.PLAYBACK_TIME_UPDATED, function(e) {
-        let now = new Date() * 0.001;
-        let ptime = $scope.player.timeAsUTC();
-        window.console.log('Live delay is', (now - ptime).toFixed(3), 'seconds at playback time', ptime, '.');
+        let nowd = new Date() * 0.001;
+        let playbackd = $scope.player.timeAsUTC();
+        window.console.log('Live delay is', (nowd - playbackd).toFixed(3), 'seconds at playback time', playbackd, '.');
     }, $scope);
 
     ////////////////////////////////////////
