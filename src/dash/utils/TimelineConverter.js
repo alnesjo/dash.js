@@ -107,7 +107,7 @@ function TimelineConverter() {
     }
 
     function calcPresentationTimeFromWallTime(wallTime, period) {
-        //console.log("XXX", wallTime.getTime() - period.mpd.availabilityStartTime.getTime(), clientServerTimeShift * 1000, clientServerTimeShift, period.mpd.availabilityStartTime.getTime())
+        //window.console.log('XXX', wallTime.getTime() - period.mpd.availabilityStartTime.getTime(), clientServerTimeShift * 1000, clientServerTimeShift, period.mpd.availabilityStartTime.getTime());
         return ((wallTime.getTime() - period.mpd.availabilityStartTime.getTime() + clientServerTimeShift * 1000) / 1000);
     }
 
@@ -151,25 +151,11 @@ function TimelineConverter() {
         }
 
         //Dyanmic Range Finder
-        var [availabilityTimeComplete, availabilityTimeOffset] = (function (m) {
-            var [availabilityTimeComplete, availabilityTimeOffset] = [true, 0];
-            if (m.hasOwnProperty('BaseURL')) {
-                if (m.BaseURL.hasOwnProperty('availabilityTimeComplete')) {
-                    availabilityTimeComplete = m.BaseURL.availabilityTimeComplete;
-                }
-                if (m.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
-                    availabilityTimeOffset = m.BaseURL.availabilityTimeOffset;
-                }
-            }
-            return [availabilityTimeComplete !== 'false', availabilityTimeOffset];
-        })(representation.adaptation.period.mpd.manifest);
         var d = representation.segmentDuration || (representation.segments && representation.segments.length ? representation.segments[representation.segments.length - 1].duration : 0);
-        d = availabilityTimeComplete ? d : d - availabilityTimeOffset;
         var now = calcPresentationTimeFromWallTime(new Date(), period);
         var periodEnd = period.start + period.duration;
         range.start = Math.max((now - period.mpd.timeShiftBufferDepth), period.start);
         range.end = now >= periodEnd && now - d < periodEnd ? periodEnd - d : now - d;
-
         return range;
     }
 
