@@ -31,7 +31,7 @@
 /**
  * Created by robert on 2017-05-10.
  */
-/* global Headers: false, ProgressEvent: false */
+/* global Headers: false */
 
 import {HTTPRequest} from './vo/metrics/HTTPRequest';
 import FactoryMaker from '../core/FactoryMaker';
@@ -75,82 +75,20 @@ function FetchLoader(cfg) {
             request.requestStartDate = new Date();
 
             const progress = (function () {
-                // const boxNameDecoder = new TextDecoder('utf-8');
-                // const legalBoxNames = ['ftyp','moov','styp','moof','skip','mdat','free','sidx'];
-                // const endOfChunkBoxNames = ['moov', 'mdat'];
-                //
-                // function boxSize(data) {
-                //     return new DataView(data.slice(0,4).buffer).getUint32(0,false);
-                // }
-                //
-                // function boxName(data) {
-                //     return boxNameDecoder.decode(data.subarray(4, 8));
-                // }
-                //
-                // function legalBox(data) {
-                //     return legalBoxNames.includes(boxName(data));
-                // }
-                //
-                // function endOfChunk(data) {
-                //     return endOfChunkBoxNames.includes(boxName(data));
-                // }
-                //
-                // function headBox(data) {
-                //     let end = 0;
-                //     if (8 <= data.length) {
-                //         if (legalBox(data)) {
-                //             let size = boxSize(data);
-                //             end = size > data.length ? 0 : size;
-                //         } else {
-                //             throw new Error('`' + boxName(data) + '\' is not a legal MP4 box name.');
-                //         }
-                //     }
-                //     return [data.subarray(0,end), data.subarray(end)];
-                // }
-                //
-                // function headChunk(data) {
-                //     let end = 0;
-                //     while (true) {
-                //         let box = headBox(data.subarray(end))[0];
-                //         if (0 < box.length) { // append box to chunk
-                //             end += box.length;
-                //             if (endOfChunk(box)) break;
-                //         } else { // no box was extracted, but chunk isn't done yet
-                //             end = 0;
-                //             break;
-                //         }
-                //     }
-                //     return [data.subarray(0,end), data.subarray(end)];
-                // }
+                let then;
+                let remaining = new Uint8Array();
 
-                function concat(a, b) {
+                function concatTypedArray(a, b) {
+                    if (a.constructor !== b.constructor) {
+                        throw new TypeError('Both');
+                    }
                     let c = new a.constructor(a.length + b.length);
                     c.set(a);
                     c.set(b, a.length);
                     return c;
                 }
 
-                let slidingData = new Uint8Array();
-                let [firstProgress, firstChunkLoaded] = [true, false];
-                let [lastTraceDate, lastTraceReceivedCount] = [request.requestStartDate, 0];
-
-                return function (event, newData) {
-                    const currentDate = new Date();
-                    let data = newData ? concat(slidingData, newData) : slidingData;
-                    if (firstProgress) {
-                        firstProgress = false;
-                        request.firstByteDate = currentDate;
-                    }
-                    if (!firstChunkLoaded) {
-                        // If the segment is loaded partially (BaseURL.availabilityTimeComplete is false), subsequent
-                        // loads must not be accounted for in bandwidth estimation! Should also be feasible for complete
-                        // segments.
-                        traces.push({
-                            s: lastTraceDate,
-                            d: currentDate - lastTraceDate,
-                            b: [event.loaded ? event.loaded - lastTraceReceivedCount : 0]
-                        });
-                    }
+                function getReady(data) {
                     let boxes = ISOBoxer.parseBuffer(data.buffer).boxes;
                     let end = 0;
                     for (let i = 0; i < boxes.length; i++) {
@@ -161,71 +99,25 @@ function FetchLoader(cfg) {
                             end = boxes[i]._offset + boxes[i].size;
                         }
                     }
-                    //let end = boxes[idx]._cursor.offset;
-                    let chunk;
-                    [chunk, data] = [data.subarray(0, end), data.subarray(end)];
-                    if (0 < chunk.length) {
-                        if (0 < data.length) {
-                            // TODO Since the server only yields whole boxes, we are in progress of loading a box, i.e. server is currently delivering this chunk at full rate
-                        }
-                        if (!firstChunkLoaded) {
-                            firstChunkLoaded = true;
-                            let availabilityTimeComplete = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeComplete;
-                            let availabilityTimeOffset = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeOffset;
-                            let remainingMediaDuration = availabilityTimeComplete ? 0 : availabilityTimeOffset;
-                            let remainingRatio = remainingMediaDuration / (request.duration - remainingMediaDuration);
-                            let remainingDownloadDuration = remainingRatio * (currentDate - request.requestStartDate);
-                            let remainingBytes = event.loaded ? remainingRatio * event.loaded : 0;
-                            request.requestEndDate = new Date(currentDate.getTime() + remainingDownloadDuration);
-                            traces.push({
-                                s: currentDate,
-                                d: remainingDownloadDuration,
-                                b: [remainingBytes]
-                            });
-                        }
-                        if (config.progress) {
-                            config.progress(chunk);
-                        }
-                    }
+                    return [data.subarray(0, end), data.subarray(end)];
+                }
 
-                    // TODO Remove this and parsing functions
-                    // for (let chunk; [chunk, data] = headChunk(data), (0 < chunk.length); ) {
-                    //     log(request.mediaType, request.startTime, 'progress (' + chunk.length + ' bytes) after',
-                    //         ((currentDate - request.requestStartDate) * 0.001).toFixed(2), 'seconds.');
-                    //     if (!firstChunkLoaded) {
-                    //         firstChunkLoaded = true;
-                    //         let availabilityTimeComplete = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeComplete;
-                    //         let availabilityTimeOffset = request.mediaInfo.streamInfo.manifestInfo.availabilityTimeOffset;
-                    //         let remainingMediaDuration = availabilityTimeComplete ? 0 : availabilityTimeOffset;
-                    //         let remainingRatio = remainingMediaDuration / (request.duration - remainingMediaDuration);
-                    //         let remainingDownloadDuration = remainingRatio * (currentDate - request.requestStartDate);
-                    //         let remainingBytes = event.loaded ? remainingRatio * event.loaded : 0;
-                    //         request.requestEndDate = new Date(currentDate.getTime() + remainingDownloadDuration);
-                    //         traces.push({
-                    //             s: currentDate,
-                    //             d: remainingDownloadDuration,
-                    //             b: [remainingBytes]
-                    //         });
-                    //     }
-                    //     if (config.progress) {
-                    //         config.progress(chunk);
-                    //     }
-                    // }
-                    if (event.lengthComputable) {
-                        request.bytesLoaded = event.loaded;
-                        request.bytesTotal = event.total;
-                        const megabytes = (bytes) => (bytes / (1024 * 1024)).toPrecision(3) + 'MB';
-                        const percent = (num) => (100 * num).toPrecision(3) + '%';
-                        let approximatedSize = traces.reduce((a,b) => a + b.b[0], 0);
-                        let actualSize = event.total;
-                        let error = Math.abs(actualSize - approximatedSize) / actualSize;
-                        log('Total size approximated as', megabytes(approximatedSize),
-                            'but was actually', megabytes(actualSize), '.',
-                            'Error:', percent(error), '.');
+                return function (progress) {
+                    let now = new Date();
+                    then = then || now;
+                    if (progress) {
+                        traces.push({
+                            s: then,
+                            d: now - then,
+                            b: [progress.length]
+                        });
+                        let ready;
+                        [ready, remaining] = getReady(concatTypedArray(remaining, progress));
+                        if (0 < ready.length && config.progress) {
+                            config.progress(ready);
+                        }
+                        then = (0 < remaining.length) ? now : undefined;
                     }
-                    slidingData = data;
-                    lastTraceDate = currentDate;
-                    lastTraceReceivedCount = event.loaded;
                 };
             })();
 
@@ -240,7 +132,8 @@ function FetchLoader(cfg) {
                     mode: mediaPlayerModel.getXHRWithCredentialsForType(request.type)
                 };
             })()).then(({status, statusText, url, headers, body}) => {
-                progress(new ProgressEvent('loadstart'));
+                request.firstByteDate = new Date();
+                progress();
                 let headersString = '';
                 for (const pair of headers) {
                     headersString += pair[0] + ': ' + pair[1] + '\r\n';
@@ -254,31 +147,28 @@ function FetchLoader(cfg) {
                     reader: body.getReader()
                 };
             }).then(({url, status, statusText, headers, reader}) => {
-                let loaded = 0;
+                request.bytesLoaded = 0;
                 const consume = ({value, done}) => {
                     if (done) {
+                        request.requestEndDate = new Date();
+                        request.bytesTotal = request.bytesLoaded;
+                        progress();
                         return {
                             url: url,
                             status: status,
                             statusText: statusText,
-                            headers: headers,
-                            loaded: loaded
+                            headers: headers
                         };
                     }
-                    loaded += value.length;
-                    progress(new ProgressEvent('progress', {loaded: loaded}), value);
+                    request.bytesLoaded += value.length;
+                    progress(value);
                     return reader.read().then(consume);
                 };
                 return reader.read().then(consume);
-            }).then(({url, status, statusText, headers, loaded}) => {
-                let success = false;
-                if (status >= 200 && status <= 299) {
-                    success = true;
-                    progress(new ProgressEvent('load', {
-                        lengthComputable: true,
-                        loaded: loaded,
-                        total: loaded
-                    }));
+            }).then(({url, status, statusText, headers}) => {
+                let success = status >= 200 && status <= 299;
+                if (success) {
+                    progress();
                     if (config.success) {
                         config.success();
                     }
@@ -286,7 +176,7 @@ function FetchLoader(cfg) {
                         config.complete(request, statusText);
                     }
                 } else {
-                    progress(new ProgressEvent('error'));
+                    progress();
                     if (remainingAttempts > 0) {
                         remainingAttempts--;
                         retryTimers.push(setTimeout(function () {
@@ -302,7 +192,6 @@ function FetchLoader(cfg) {
                         }
                     }
                 }
-                progress(new ProgressEvent('loadend'));
                 if (!request.checkForExistenceOnly) {
                     metricsModel.addHttpRequest(
                         request.mediaType,
