@@ -84,7 +84,7 @@ function ThroughputRule(config) {
     function getAverageLatency(mediaType) {
         let average;
         if (latencyArray[mediaType] && latencyArray[mediaType].length > 0) {
-            average = latencyArray[mediaType].reduce((a, b) => { return a + b; }) / latencyArray[mediaType].length;
+            average = latencyArray[mediaType].reduce((a, b) => a + b, 0) / latencyArray[mediaType].length;
         }
 
         return average;
