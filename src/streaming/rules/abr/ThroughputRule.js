@@ -163,11 +163,13 @@ function ThroughputRule(config) {
         if (lastRequest.trace && lastRequest.trace.length) {
 
             latencyTimeInMilliseconds = (lastRequest.tresponse.getTime() - lastRequest.trequest.getTime()) || 1;
-            downloadTimeInMilliseconds = (lastRequest._tfinish.getTime() - lastRequest.tresponse.getTime()) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
+            //downloadTimeInMilliseconds = (lastRequest._tfinish.getTime() - lastRequest.tresponse.getTime()) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
+            downloadTimeInMilliseconds = lastRequest.trace.reduce((a, b) => a + b.d, 0) || 1;  //Make sure never 0 we divide by this value. Avoid infinity!
 
             const bytes = lastRequest.trace.reduce((a, b) => a + b.b[0], 0);
 
             const lastRequestThroughput = Math.round((bytes * 8) / (downloadTimeInMilliseconds / 1000));
+            log('Last', mediaType, 'request throughput:', (lastRequestThroughput / (1000000)).toPrecision(3) + 'mbit');
 
             let throughput;
             let latency;
