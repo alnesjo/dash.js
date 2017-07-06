@@ -41,7 +41,7 @@ function ThroughputRule(config) {
     const MAX_MEASUREMENTS_TO_KEEP = 20;
     const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 3;
     const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD = 4;
-    const AVERAGE_LATENCY_SAMPLES = AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD;
+    const AVERAGE_LATENCY_SAMPLES = 4;
     const CACHE_LOAD_THRESHOLD_VIDEO = 50;
     const CACHE_LOAD_THRESHOLD_AUDIO = 5;
     const CACHE_LOAD_THRESHOLD_LATENCY = 50;
@@ -63,22 +63,17 @@ function ThroughputRule(config) {
         mediaPlayerModel = MediaPlayerModel(context).getInstance();
     }
 
-    function storeLastRequestThroughputByType(type, throughput) {
-        throughputArray[type] = throughputArray[type] || [];
-        throughputArray[type].push(throughput);
+    function storeLastRequestThroughput(mediaType, {bytes, duration}) {
+        throughputArray[mediaType] = throughputArray[mediaType] || [];
+        throughputArray[mediaType].push({bytes, duration});
     }
 
     function storeLatency(mediaType, latency) {
-        if (!latencyArray[mediaType]) {
-            latencyArray[mediaType] = [];
-        }
+        latencyArray[mediaType] = latencyArray[mediaType] || [];
         latencyArray[mediaType].push(latency);
-
         if (latencyArray[mediaType].length > AVERAGE_LATENCY_SAMPLES) {
-            return latencyArray[mediaType].shift();
+            latencyArray[mediaType].shift();
         }
-
-        return undefined;
     }
 
     function getAverageLatency(mediaType) {
@@ -94,12 +89,14 @@ function ThroughputRule(config) {
         let size = Math.min(throughputArray[type].length, isDynamic ? AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE : AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD);
         const sampleArray = throughputArray[type].slice(size * -1, throughputArray[type].length);
         if (sampleArray.length > 1) {
-            sampleArray.reduce((a, b) => {
-                if (a * THROUGHPUT_INCREASE_SCALE <= b || a >= b * THROUGHPUT_DECREASE_SCALE) {
+            sampleArray.reduce(function (previous, {bytes, duration}) {
+                let current = (8 * bytes) / (0.001 * duration);
+                if (previous * THROUGHPUT_INCREASE_SCALE <= current ||
+                    current * THROUGHPUT_DECREASE_SCALE <= previous) {
                     size++;
                 }
-                return b;
-            });
+                return current;
+            }, NaN);
         }
         size = Math.min(throughputArray[type].length, size);
         return throughputArray[type].slice(size * -1, throughputArray[type].length);
@@ -109,10 +106,10 @@ function ThroughputRule(config) {
         const sample = getSample(type, isDynamic);
         let averageThroughput = 0;
         if (sample.length > 0) {
-            const totalSampledValue = sample.reduce((a, b) => a + b, 0);
-            averageThroughput = totalSampledValue / sample.length;
+            const [bytes, duration] = sample.reduce((acc, {bytes, duration}) => [acc[0] + bytes, acc[1] + duration], [0,0]);
+            averageThroughput = (8 * bytes) / (0.001 * duration);
         }
-        if (throughputArray[type].length >= MAX_MEASUREMENTS_TO_KEEP) {
+        while (throughputArray[type].length >= MAX_MEASUREMENTS_TO_KEEP) {
             throughputArray[type].shift();
         }
         return (averageThroughput / 1000 ) * mediaPlayerModel.getBandwidthSafetyFactor();
@@ -168,22 +165,19 @@ function ThroughputRule(config) {
 
             const bytes = lastRequest.trace.reduce((a, b) => a + b.b[0], 0);
 
-            const lastRequestThroughput = Math.round((bytes * 8) / (downloadTimeInMilliseconds / 1000));
-            log('Last', mediaType, 'request throughput:', (lastRequestThroughput / (1000000)).toPrecision(3) + 'mbit');
-
             let throughput;
             let latency;
             //Prevent cached fragment loads from skewing the average throughput value - allow first even if cached to set allowance for ABR rules..
             if (isCachedResponse(latencyTimeInMilliseconds, downloadTimeInMilliseconds, mediaType)) {
                 if (!throughputArray[mediaType] || !latencyArray[mediaType]) {
-                    throughput = lastRequestThroughput / 1000;
+                    throughput = (8 * bytes) / (0.001 * downloadTimeInMilliseconds) * 0.001;
                     latency = latencyTimeInMilliseconds;
                 } else {
                     throughput = getAverageThroughput(mediaType, isDynamic);
                     latency = getAverageLatency(mediaType);
                 }
             } else {
-                storeLastRequestThroughputByType(mediaType, lastRequestThroughput);
+                storeLastRequestThroughput(mediaType, {bytes: bytes, duration: downloadTimeInMilliseconds});
                 throughput = getAverageThroughput(mediaType, isDynamic);
                 storeLatency(mediaType, latencyTimeInMilliseconds);
                 latency = getAverageLatency(mediaType, isDynamic);
