@@ -28,17 +28,16 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-
+import Constants from '../../streaming/constants/Constants';
 import FactoryMaker from '../../core/FactoryMaker';
 import Debug from '../../core/Debug';
-import ErrorHandler from '../../streaming/utils/ErrorHandler';
 import BASE64 from '../../../externals/base64';
 
 function MssParser(config) {
 
     const context = this.context;
     const log = Debug(context).getInstance().log;
-    const errorHandler = ErrorHandler(context).getInstance();
+    const errorHandler = config.errHandler;
 
     const TIME_SCALE_100_NANOSECOND_UNIT = 10000000.0;
     const SUPPORTED_CODECS = ['AAC', 'AACL', 'AVC1', 'H264', 'TTML', 'DFXP'];
@@ -106,7 +105,7 @@ function MssParser(config) {
             range,
             i;
 
-        adaptationSet.id = streamIndex.getAttribute('Name');
+        adaptationSet.id = streamIndex.getAttribute('Name') ? streamIndex.getAttribute('Name') : streamIndex.getAttribute('Type');
         adaptationSet.contentType = streamIndex.getAttribute('Type');
         adaptationSet.lang = streamIndex.getAttribute('Language') || 'und';
         adaptationSet.mimeType = mimeTypeMap[adaptationSet.contentType];
@@ -198,7 +197,7 @@ function MssParser(config) {
             representation.audioSamplingRate = parseInt(qualityLevel.getAttribute('SamplingRate'), 10);
             representation.audioChannels = parseInt(qualityLevel.getAttribute('Channels'), 10);
         } else if (fourCCValue.indexOf('TTML') || fourCCValue.indexOf('DFXP')) {
-            representation.codecs = 'stpp';
+            representation.codecs = Constants.STPP;
         }
 
         representation.codecPrivateData = '' + qualityLevel.getAttribute('CodecPrivateData');
@@ -470,10 +469,14 @@ function MssParser(config) {
         manifest.timeShiftBufferDepth = parseFloat(smoothStreamingMedia.getAttribute('DVRWindowLength')) / TIME_SCALE_100_NANOSECOND_UNIT;
         manifest.mediaPresentationDuration = (parseFloat(smoothStreamingMedia.getAttribute('Duration')) === 0) ? Infinity : parseFloat(smoothStreamingMedia.getAttribute('Duration')) / TIME_SCALE_100_NANOSECOND_UNIT;
         manifest.minBufferTime = mediaPlayerModel.getStableBufferTime();
+        manifest.ttmlTimeIsRelative = true;
 
         // In case of live streams, set availabilityStartTime property according to DVRWindowLength
         if (manifest.type === 'dynamic') {
             manifest.availabilityStartTime = new Date(manifestLoadedTime.getTime() - (manifest.timeShiftBufferDepth * 1000));
+            manifest.refreshManifestOnSwitchTrack = true;
+            manifest.doNotUpdateDVRWindowOnBufferUpdated = true; // done by Mss fragment processor
+            manifest.ignorePostponeTimePeriod = true; // in Mss, manifest is never updated
         }
 
         // Map period node to manifest root node
@@ -508,7 +511,7 @@ function MssParser(config) {
         for (i = 0; i < adaptations.length; i += 1) {
             // In case of VOD streams, check if start time is greater than 0.
             // Therefore, set period start time to the higher adaptation start time
-            if (manifest.type === 'static' && adaptations[i].contentType !== 'text') {
+            if (manifest.type === 'static' && adaptations[i].contentType !== Constants.TEXT) {
                 firstSegment = adaptations[i].SegmentTemplate.SegmentTimeline.S_asArray[0];
                 lastSegment = adaptations[i].SegmentTemplate.SegmentTimeline.S_asArray[adaptations[i].SegmentTemplate.SegmentTimeline.S_asArray.length - 1];
                 adaptations[i].SegmentTemplate.initialization = '$Bandwidth$';
@@ -524,6 +527,12 @@ function MssParser(config) {
                 }
             } else {
                 adaptations[i].SegmentTemplate.initialization = '$Bandwidth$';
+                // Match timeShiftBufferDepth to video segment timeline duration
+                if (manifest.timeShiftBufferDepth > 0 &&
+                    adaptations[i].contentType === 'video' &&
+                    manifest.timeShiftBufferDepth > adaptations[i].SegmentTemplate.SegmentTimeline.duration) {
+                    manifest.timeShiftBufferDepth = adaptations[i].SegmentTemplate.SegmentTimeline.duration;
+                }
             }
 
             // Propagate content protection information into each adaptation
