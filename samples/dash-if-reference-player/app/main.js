@@ -2,6 +2,10 @@
 
 var app = angular.module('DashPlayer', ['DashSourcesService', 'DashContributorsService', 'angular-flot']);
 
+function livestat() {
+    window.console.log('livestat', '[' + new Date().getTime() + ']', ...arguments);
+}
+
 $(document).ready(function () {
     $('[data-toggle="tooltip"]').tooltip();
     $('#drmLicenseForm').hide();
@@ -29,7 +33,7 @@ app.controller('DashController', function ($scope, sources, contributors) {
 
 
     $scope.selectedItem = {
-        url: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd"
+        url: 'http://10.16.48.5:8059/livesim/chunkdur_1/ato_7/testpic4_8s/Manifest.mpd'
     };
 
     sources.query(function (data) {
@@ -200,6 +204,10 @@ app.controller('DashController', function ($scope, sources, contributors) {
     if (doesTimeMarchesOn()) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
     }
+    $scope.player.setLiveDelay(0);
+    $scope.player.setLiveDelayFragmentCount(0);
+    $scope.player.setFragmentLoaderRetryAttempts(10);
+    $scope.player.setFragmentLoaderRetryInterval(100);
 
     // get buffer default value
     $scope.defaultLiveDelay = $scope.player.getLiveDelay();
@@ -249,6 +257,14 @@ app.controller('DashController', function ($scope, sources, contributors) {
             $scope.doLoad();
         }
     }, $scope);
+
+    $scope.video.addEventListener('timeupdate', function () {
+        var now = new Date();
+        var playback = $scope.video.currentTime * 1000;
+        var [throughputAudio, throughputVideo] = ['audio', 'video'].map($scope.player.getAverageThroughput);
+        livestat('timeupdate', 'delay:', (now - playback).toFixed(0), 'bandwidth:', throughputAudio.toFixed(0), '+', throughputVideo.toFixed(0));
+    }, true);
+
 
     ////////////////////////////////////////
     //
@@ -523,6 +539,8 @@ app.controller('DashController', function ($scope, sources, contributors) {
 
     $scope.doLoad = function () {
 
+        livestat('load start');
+
         $scope.initSession();
 
         var protData = {};
@@ -653,7 +671,7 @@ app.controller('DashController', function ($scope, sources, contributors) {
             };
 
             var downloadTimes = requestWindow.map(function (req) {
-                return Math.abs(req._tfinish.getTime() - req.tresponse.getTime()) / 1000;
+                return req.trace.reduce((a, b) => a + b.d, 0) / 1000;
             });
 
             download[type] = {

@@ -644,7 +644,12 @@ function DashManifestModel(config) {
             mpd.manifest = manifest;
 
             if (manifest.hasOwnProperty(DashConstants.AVAILABILITY_START_TIME)) {
-                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime());
+                let availabilityTimeOffset = 0;
+                if (manifest.hasOwnProperty('BaseURL') && manifest.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
+                    availabilityTimeOffset = manifest.BaseURL.availabilityTimeOffset;
+                }
+                // Embedding availabilityTimeOffset into AST, effectively making it adjusted AST
+                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime - 1000 * availabilityTimeOffset);
             } else {
                 mpd.availabilityStartTime = new Date(manifest.loadedTime.getTime());
             }

@@ -37,10 +37,10 @@ import FactoryMaker from '../../core/FactoryMaker.js';
 
 function ThroughputHistory(config) {
 
-    const MAX_MEASUREMENTS_TO_KEEP = 20;
-    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 3;
-    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD = 4;
-    const AVERAGE_LATENCY_SAMPLE_AMOUNT = 4;
+    const MAX_MEASUREMENTS_TO_KEEP = 40;
+    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 9;
+    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD = 12;
+    const AVERAGE_LATENCY_SAMPLE_AMOUNT = 12;
     const CACHE_LOAD_THRESHOLD_VIDEO = 50;
     const CACHE_LOAD_THRESHOLD_AUDIO = 5;
     const THROUGHPUT_DECREASE_SCALE = 1.3;
@@ -70,22 +70,24 @@ function ThroughputHistory(config) {
         }
 
         const latencyTimeInMilliseconds = (httpRequest.tresponse.getTime() - httpRequest.trequest.getTime()) || 1;
-        const downloadTimeInMilliseconds = (httpRequest._tfinish.getTime() - httpRequest.tresponse.getTime()) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
+        const downloadTimeInMilliseconds = httpRequest.trace.reduce((a, b) => a + b.d, 0) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
         const downloadBytes = httpRequest.trace.reduce((a, b) => a + b.b[0], 0);
         const throughputMeasureTime = useDeadTimeLatency ? downloadTimeInMilliseconds : latencyTimeInMilliseconds + downloadTimeInMilliseconds;
-        let throughput = Math.round((8 * downloadBytes) / throughputMeasureTime); // bits/ms = kbits/s
+
+        let throughput = Math.round(8 * downloadBytes / throughputMeasureTime);
+
 
         throughputDict[mediaType] = throughputDict[mediaType] || [];
         latencyDict[mediaType] = latencyDict[mediaType] || [];
 
         if (isCachedResponse(mediaType, latencyTimeInMilliseconds, downloadTimeInMilliseconds)) {
-            if (throughputDict[mediaType].length > 0 && !throughputDict[mediaType].hasCachedEntries) {
+            if (0 < throughputDict[mediaType].length && !throughputDict[mediaType].hasCachedEntries) {
                 // already have some entries which are not cached entries
                 // prevent cached fragment loads from skewing the average values
                 return;
             } else { // have no entries || have cached entries
                 // no uncached entries yet, rely on cached entries, set allowance for ABR rules
-                throughput /= 1000;
+                // throughput /= 1000;
                 throughputDict[mediaType].hasCachedEntries = true;
             }
         } else if (throughputDict[mediaType] && throughputDict[mediaType].hasCachedEntries) {
@@ -148,7 +150,7 @@ function ThroughputHistory(config) {
 
         arr = arr.slice(-sampleSize); // still works if sampleSize too large
         // arr.length >= 1
-        return arr.reduce((total, elem) => total + elem) / arr.length;
+        return arr.reduce((total, elem) => total + elem, 0) / arr.length;
     }
 
     function getAverageThroughput(mediaType, isDynamic) {

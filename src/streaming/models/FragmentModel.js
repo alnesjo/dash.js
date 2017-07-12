@@ -59,7 +59,7 @@ function FragmentModel(config) {
         executedRequests = [];
         loadingRequests = [];
         eventBus.on(Events.LOADING_COMPLETED, onLoadingCompleted, instance);
-
+        eventBus.on(Events.LOADING_PROGRESS, onLoadingProgress, instance);
     }
 
     function setStreamProcessor(value) {
@@ -249,27 +249,37 @@ function FragmentModel(config) {
         metricsModel.addRequestsQueue(request.mediaType, loadingRequests, executedRequests);
     }
 
-    function onLoadingCompleted(e) {
-        if (e.sender !== fragmentLoader) return;
+    function onLoadingCompleted({request, response, error, sender}) {
+        if (sender !== fragmentLoader) return;
+        // TODO REMOVE
+    }
 
-        loadingRequests.splice(loadingRequests.indexOf(e.request), 1);
+    function onLoadingProgress({request, response, error, sender}) {
+        if (sender !== fragmentLoader) return;
 
-        if (e.response && !e.error) {
-            executedRequests.push(e.request);
+        let idx = loadingRequests.indexOf(request);
+        if (-1 !== idx) {
+            addSchedulingInfoMetrics(request, error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
+
+            loadingRequests.splice(idx, 1);
+
+            if (response && !error) {
+                executedRequests.push(request);
+            }
         }
 
-        addSchedulingInfoMetrics(e.request, e.error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
 
         eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
-            request: e.request,
-            response: e.response,
-            error: e.error,
+            request: request,
+            response: response,
+            error: error,
             sender: this
         });
     }
 
     function reset() {
         eventBus.off(Events.LOADING_COMPLETED, onLoadingCompleted, this);
+        eventBus.off(Events.LOADING_PROGRESS, onLoadingProgress, this);
 
         if (fragmentLoader) {
             fragmentLoader.reset();
