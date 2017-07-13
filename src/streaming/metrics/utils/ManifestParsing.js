@@ -9,17 +9,18 @@ function ManifestParsing (config) {
     let dashManifestModel = config.dashManifestModel;
 
     function getMetricsRangeStartTime(manifest, dynamic, range) {
-        var mpd = dashManifestModel.getMpd(manifest);
-        var voPeriods;
-        var presentationStartTime = 0;
-        var reportingStartTime;
+        const mpd = dashManifestModel.getMpd(manifest);
+        const [baseUrl] = mpd.baseUrls;
+        let voPeriods;
+        let presentationStartTime = 0;
+        let reportingStartTime;
 
         if (dynamic) {
             // For services with MPD@type='dynamic', the start time is
             // indicated in wall clock time by adding the value of this
             // attribute to the value of the MPD@availabilityStartTime
             // attribute.
-            presentationStartTime = mpd.availabilityStartTime.getTime() / 1000;
+            presentationStartTime = mpd.availabilityStartTime / 1000 - baseUrl.availabilityTimeOffset;
         } else {
             // For services with MPD@type='static', the start time is indicated
             // in Media Presentation time and is relative to the PeriodStart
@@ -44,12 +45,12 @@ function ManifestParsing (config) {
     }
 
     function getMetrics(manifest) {
-        var metrics = [];
+        let metrics = [];
 
         if (manifest.Metrics_asArray) {
             manifest.Metrics_asArray.forEach(metric => {
-                var metricEntry = new Metrics();
-                var isDynamic = dashManifestModel.getIsDynamic(manifest);
+                let metricEntry = new Metrics();
+                const isDynamic = dashManifestModel.getIsDynamic(manifest);
 
                 if (metric.hasOwnProperty('metrics')) {
                     metricEntry.metrics = metric.metrics;
@@ -60,7 +61,7 @@ function ManifestParsing (config) {
 
                 if (metric.Range_asArray) {
                     metric.Range_asArray.forEach(range => {
-                        var rangeEntry = new Range();
+                        let rangeEntry = new Range();
 
                         rangeEntry.starttime =
                             getMetricsRangeStartTime(manifest, isDynamic, range);
@@ -81,7 +82,7 @@ function ManifestParsing (config) {
 
                 if (metric.Reporting_asArray) {
                     metric.Reporting_asArray.forEach(reporting => {
-                        var reportingEntry = new Reporting();
+                        let reportingEntry = new Reporting();
 
                         if (reporting.hasOwnProperty(Constants.SCHEME_ID_URI)) {
                             reportingEntry.schemeIdUri = reporting.schemeIdUri;

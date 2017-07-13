@@ -84,12 +84,19 @@ function DashAdapter() {
         let trackInfo = new TrackInfo();
         const realAdaptation = voRepresentation.adaptation.period.mpd.manifest.Period_asArray[voRepresentation.adaptation.period.index].AdaptationSet_asArray[voRepresentation.adaptation.index];
         const realRepresentation = dashManifestModel.getRepresentationFor(voRepresentation.index, realAdaptation);
+        const [baseUrl] = voRepresentation.adaptation.period.mpd.baseUrls;
 
         trackInfo.id = voRepresentation.id;
         trackInfo.quality = voRepresentation.index;
         trackInfo.bandwidth = dashManifestModel.getBandwidth(realRepresentation);
         trackInfo.DVRWindow = voRepresentation.segmentAvailabilityRange;
-        trackInfo.fragmentDuration = voRepresentation.segmentDuration || (voRepresentation.segments && voRepresentation.segments.length > 0 ? voRepresentation.segments[0].duration : NaN);
+        if (voRepresentation.segmentDuration) {
+            trackInfo.fragmentDuration = voRepresentation.segmentDuration - (baseUrl.availabilityTimeComplete && baseUrl.availabilityTimeOffset);
+        } else if (voRepresentation.segments && voRepresentation.segments.length > 0) {
+            trackInfo.fragmentDuration = voRepresentation.segments[0].duration;
+        } else {
+            trackInfo.fragmentDuration = NaN;
+        }
         trackInfo.MSETimeOffset = voRepresentation.MSETimeOffset;
         trackInfo.useCalculatedLiveEdgeTime = voRepresentation.useCalculatedLiveEdgeTime;
         trackInfo.mediaInfo = convertAdaptationToMediaInfo(voRepresentation.adaptation);
@@ -172,11 +179,12 @@ function DashAdapter() {
     }
 
     function convertMpdToManifestInfo(mpd) {
-        let manifestInfo = new ManifestInfo();
+        const manifestInfo = new ManifestInfo();
+        const [baseUrl] = mpd.baseUrls;
 
         manifestInfo.DVRWindowSize = mpd.timeShiftBufferDepth;
         manifestInfo.loadedTime = mpd.manifest.loadedTime;
-        manifestInfo.availableFrom = mpd.availabilityStartTime;
+        manifestInfo.availableFrom = new Date(mpd.availabilityStartTime - 1000 * baseUrl.availabilityTimeOffset);
         manifestInfo.minBufferTime = mpd.manifest.minBufferTime;
         manifestInfo.maxFragmentDuration = mpd.maxSegmentDuration;
         manifestInfo.duration = dashManifestModel.getDuration(mpd.manifest);

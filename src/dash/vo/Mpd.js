@@ -42,6 +42,7 @@ class Mpd {
         this.maxSegmentDuration = Number.POSITIVE_INFINITY;
         this.minimumUpdatePeriod = NaN;
         this.mediaPresentationDuration = NaN;
+        this.baseUrls = [];
     }
 }
 

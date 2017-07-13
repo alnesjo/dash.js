@@ -268,7 +268,6 @@ function FragmentModel(config) {
             }
         }
 
-
         eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
             request: request,
             response: response,

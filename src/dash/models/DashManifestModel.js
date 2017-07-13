@@ -644,12 +644,7 @@ function DashManifestModel(config) {
             mpd.manifest = manifest;
 
             if (manifest.hasOwnProperty(DashConstants.AVAILABILITY_START_TIME)) {
-                let availabilityTimeOffset = 0;
-                if (manifest.hasOwnProperty('BaseURL') && manifest.BaseURL.hasOwnProperty('availabilityTimeOffset')) {
-                    availabilityTimeOffset = manifest.BaseURL.availabilityTimeOffset;
-                }
-                // Embedding availabilityTimeOffset into AST, effectively making it adjusted AST
-                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime - 1000 * availabilityTimeOffset);
+                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime);
             } else {
                 mpd.availabilityStartTime = new Date(manifest.loadedTime.getTime());
             }
@@ -677,6 +672,8 @@ function DashManifestModel(config) {
             if (manifest.hasOwnProperty(DashConstants.MAX_SEGMENT_DURATION)) {
                 mpd.maxSegmentDuration = manifest.maxSegmentDuration;
             }
+
+            mpd.baseUrls = getBaseURLsFromElement(manifest);
         }
 
         return mpd;
@@ -911,9 +908,15 @@ function DashManifestModel(config) {
                     baseUrl.dvb_weight = entry[DashConstants.DVB_WEIGHT];
                 }
 
-                /* NOTE: byteRange, availabilityTimeOffset,
-                 * availabilityTimeComplete currently unused
-                 */
+                if (entry.hasOwnProperty(DashConstants.AVAILABILITY_TIME_OFFSET)) {
+                    baseUrl.availabilityTimeOffset = entry[DashConstants.AVAILABILITY_TIME_OFFSET];
+                }
+
+                if (entry.hasOwnProperty(DashConstants.AVAILABILITY_TIME_COMPLETE)) {
+                    baseUrl.availabilityTimeComplete = entry[DashConstants.AVAILABILITY_TIME_COMPLETE];
+                }
+
+                // NOTE: byteRange currently unused
 
                 baseUrls.push(baseUrl);
 
