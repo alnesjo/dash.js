@@ -373,7 +373,7 @@ function ScheduleController(config) {
             const liveEdge = liveEdgeFinder.getLiveEdge();
             const dvrWindowSize = currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2;
             // TODO Need to know chunk duration before playback to choose an appropriate buffer level, ATO is only good for live edge
-            log('livestat', 'live edge delay:', new Date() / 1000 - liveEdge, 'expected chunk duration:', currentRepresentationInfo.fragmentDuration);
+            log('livestat', 'live edge delay:', new Date() - Math.round(1000 * liveEdge), 'expected chunk duration:', currentRepresentationInfo.fragmentDuration);
             const estimatedDelay = playbackController.computeLiveDelay(currentRepresentationInfo.fragmentDuration, dvrWindowSize);
             const startTime = liveEdge - estimatedDelay;
             const request = adapter.getFragmentRequestForTime(streamProcessor, currentRepresentationInfo, startTime, {

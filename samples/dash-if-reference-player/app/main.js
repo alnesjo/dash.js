@@ -204,6 +204,7 @@ app.controller('DashController', function ($scope, sources, contributors) {
     if (doesTimeMarchesOn()) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
     }
+
     $scope.player.setLiveDelay(0);
     $scope.player.setLiveDelayFragmentCount(0);
     $scope.player.setFragmentLoaderRetryAttempts(10);
@@ -259,10 +260,10 @@ app.controller('DashController', function ($scope, sources, contributors) {
     }, $scope);
 
     $scope.video.addEventListener('timeupdate', function () {
-        var now = new Date();
+        var now = new Date().getTime();
         var playback = $scope.video.currentTime * 1000;
         var [throughputAudio, throughputVideo] = ['audio', 'video'].map($scope.player.getAverageThroughput);
-        livestat('timeupdate', 'delay:', (now - playback).toFixed(0), 'bandwidth:', throughputAudio.toFixed(0), '+', throughputVideo.toFixed(0));
+        livestat('timeupdate', 'delay:', (now - playback).toFixed(0), 'bandwidth (A+V):', throughputAudio.toFixed(0), '+', throughputVideo.toFixed(0));
     }, true);
 
 

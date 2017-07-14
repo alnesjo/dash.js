@@ -75,6 +75,7 @@ function FetchLoader(cfg) {
             const progress = (function () {
                 let then;
                 let remaining = new Uint8Array();
+                let trace = true;
 
                 function concatTypedArray(a, b) {
                     if (a.constructor !== b.constructor) {
@@ -103,15 +104,19 @@ function FetchLoader(cfg) {
                     let now = new Date();
                     then = then || now;
                     if (progress) {
-                        traces.push({
-                            s: then,
-                            d: now - then,
-                            b: [progress.length]
-                        });
+                        if (trace) {
+                            traces.push({
+                                s: then,
+                                d: now - then,
+                                b: [progress.length]
+                            });
+                        }
                         let ready;
                         [ready, remaining] = getReady(concatTypedArray(remaining, progress));
                         if (0 < ready.length && config.progress) {
                             config.progress(ready);
+                            // trace = false; // Stop tracing after first chunk and according to expectations, there are no time gaps in the trace
+                            // window.console.assert(0 === traces.map(({s, d}) => [s.getTime(), s.getTime() + d]).reduce(([acc, end],[b, e]) => [acc + b - (end || b), e], [0, NaN])[0]);
                         }
                         then = (0 < remaining.length) ? now : undefined;
                     }
