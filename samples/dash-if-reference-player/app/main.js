@@ -27,9 +27,10 @@ angular.module('DashContributorsService', ['ngResource']).factory('contributors'
 
 app.controller('DashController', function ($scope, sources, contributors) {
 
+    var log = window.console.log;
 
     $scope.selectedItem = {
-        url: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd"
+        url: 'http://localhost:8059/livesim/chunkdur_1/ato_7/testpic4_8s/Manifest.mpd'
     };
 
     sources.query(function (data) {
@@ -201,6 +202,12 @@ app.controller('DashController', function ($scope, sources, contributors) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
     }
 
+    $scope.player.setLiveDelay(0);
+    $scope.player.setLiveDelayFragmentCount(0);
+    //$scope.player.setStableBufferTime(100);
+    $scope.player.setFragmentLoaderRetryAttempts(20);
+    $scope.player.setFragmentLoaderRetryInterval(500);
+
     // get buffer default value
     $scope.defaultLiveDelay = $scope.player.getLiveDelay();
     $scope.defaultStableBufferDelay = $scope.player.getStableBufferTime();
@@ -249,6 +256,26 @@ app.controller('DashController', function ($scope, sources, contributors) {
             $scope.doLoad();
         }
     }, $scope);
+
+    $scope.video.addEventListener('timeupdate', function () {
+        var videoMetrics = $scope.player.getMetricsFor('video');
+        var dashMetrics = $scope.player.getDashMetrics();
+        var now = new Date() / 1;
+        var playback = 1000 * $scope.video.currentTime;
+        var buffer = 1000 * dashMetrics.getCurrentBufferLevel(videoMetrics);
+        var throughputAudio = $scope.player.getAverageThroughput('audio');
+        var throughputVideo = $scope.player.getAverageThroughput('video');
+        var nrAudio = dashMetrics.getMaxIndexForBufferType('audio', $scope.streamInfo.index);
+        var nrVideo = dashMetrics.getMaxIndexForBufferType('video', $scope.streamInfo.index);
+        var audioIdx = $scope.player.getQualityFor('audio');
+        var videoIdx = $scope.player.getQualityFor('video');
+        log(now, 'livestat', 'timeupdate',
+            'delay:', (now - playback).toFixed(0),
+            'buffer level:', buffer.toFixed(0),
+            'bandwidth (audio video):', throughputAudio.toFixed(0), throughputVideo.toFixed(0),
+            'representation index (audio video)', audioIdx + 1 + '/' + nrAudio, videoIdx + 1 + '/' + nrVideo);
+    }, true);
+
 
     ////////////////////////////////////////
     //
@@ -523,6 +550,8 @@ app.controller('DashController', function ($scope, sources, contributors) {
 
     $scope.doLoad = function () {
 
+        log(new Date() / 1, 'livestat', 'load start');
+
         $scope.initSession();
 
         var protData = {};
@@ -653,7 +682,7 @@ app.controller('DashController', function ($scope, sources, contributors) {
             };
 
             var downloadTimes = requestWindow.map(function (req) {
-                return Math.abs(req._tfinish.getTime() - req.tresponse.getTime()) / 1000;
+                return req.trace.reduce((a, b) => a + b.d, 0) / 1000;
             });
 
             download[type] = {
