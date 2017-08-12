@@ -649,6 +649,11 @@ function DashManifestModel(config) {
                 mpd.availabilityStartTime = new Date(manifest.loadedTime.getTime());
             }
 
+            if (manifest.hasOwnProperty(DashConstants.BASE_URL) &&
+                manifest.BaseURL.hasOwnProperty(DashConstants.AVAILABILITY_TIME_OFFSET)) {
+                mpd.availabilityStartTime = new Date(mpd.availabilityStartTime - manifest.BaseURL.availabilityTimeOffset);
+            }
+
             if (manifest.hasOwnProperty(DashConstants.AVAILABILITY_END_TIME)) {
                 mpd.availabilityEndTime = new Date(manifest.availabilityEndTime.getTime());
             }

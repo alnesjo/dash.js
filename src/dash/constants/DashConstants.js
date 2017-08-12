@@ -113,6 +113,8 @@ class DashConstants {
         this.START_NUMBER = 'startNumber';
         this.PRESENTATION_TIME_OFFSET = 'presentationTimeOffset';
         this.AVAILABILITY_START_TIME = 'availabilityStartTime';
+        this.AVAILABILITY_TIME_OFFSET = 'availabilityTimeOffset';
+        this.AVAILABILITY_TIME_COMPLETE = 'availabilityTimeComplete';
         this.AVAILABILITY_END_TIME = 'availabilityEndTime';
         this.TIMESHIFT_BUFFER_DEPTH = 'timeShiftBufferDepth';
         this.MAX_SEGMENT_DURATION = 'maxSegmentDuration';
