@@ -97,6 +97,9 @@ function PlaybackController() {
     function play() {
         if (videoModel && videoModel.getElement()) {
             videoModel.play();
+            videoModel.getElement().addEventListener('loadeddata', function () {
+                seek(liveStartTime);
+            }, {once: true, capture: true});
         } else {
             playOnceInitialized = true;
         }

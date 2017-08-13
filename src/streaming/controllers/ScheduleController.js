@@ -363,18 +363,15 @@ function ScheduleController(config) {
             const liveEdge = liveEdgeFinder.getLiveEdge();
             const dvrWindowSize = currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2;
             const startTime = liveEdge - playbackController.computeLiveDelay(currentRepresentationInfo.fragmentDuration, dvrWindowSize);
-            const request = adapter.getFragmentRequestForTime(streamProcessor, currentRepresentationInfo, startTime, {
-                ignoreIsFinished: true
-            });
             seekTarget = playbackController.getLiveStartTime();
-            if (isNaN(seekTarget) || request.startTime > seekTarget) {
+            if (isNaN(seekTarget) || startTime > seekTarget) {
                 //special use case for multi period stream. If the startTime is out of the current period, send a seek command.
                 //in onPlaybackSeeking callback (StreamController), the detection of switch stream is done.
-                if (request.startTime > (currentRepresentationInfo.mediaInfo.streamInfo.start + currentRepresentationInfo.mediaInfo.streamInfo.duration)) {
-                    playbackController.seek(request.startTime);
+                if (startTime > (currentRepresentationInfo.mediaInfo.streamInfo.start + currentRepresentationInfo.mediaInfo.streamInfo.duration)) {
+                    playbackController.seek(startTime);
                 }
-                playbackController.setLiveStartTime(request.startTime);
-                seekTarget = request.startTime;
+                playbackController.setLiveStartTime(startTime);
+                seekTarget = startTime;
             }
 
             const manifestUpdateInfo = dashMetrics.getCurrentManifestUpdate(metricsModel.getMetricsFor(Constants.STREAM));
