@@ -69,10 +69,9 @@ function ThroughputHistory(config) {
         }
 
         const latencyTimeInMilliseconds = (httpRequest.tresponse.getTime() - httpRequest.trequest.getTime()) || 1;
-        const downloadTimeInMilliseconds = (httpRequest._tfinish.getTime() - httpRequest.tresponse.getTime()) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
+        const downloadTimeInMilliseconds = httpRequest.trace.reduce((a, b) => a + b.d, 0) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
         const downloadBytes = httpRequest.trace.reduce((a, b) => a + b.b[0], 0);
         const throughputMeasureTime = useDeadTimeLatency ? downloadTimeInMilliseconds : latencyTimeInMilliseconds + downloadTimeInMilliseconds;
-        let throughput = Math.round((8 * downloadBytes) / throughputMeasureTime); // bits/ms = kbits/s
 
         throughputDict[mediaType] = throughputDict[mediaType] || [];
         latencyDict[mediaType] = latencyDict[mediaType] || [];
@@ -92,7 +91,7 @@ function ThroughputHistory(config) {
             latencyDict[mediaType] = [];
         }
 
-        throughputDict[mediaType].push(throughput);
+        throughputDict[mediaType].push({bit: 8 * downloadBytes, ms: throughputMeasureTime});
         if (throughputDict[mediaType].length > MAX_MEASUREMENTS_TO_KEEP) {
             throughputDict[mediaType].shift();
         }
@@ -103,7 +102,7 @@ function ThroughputHistory(config) {
         }
     }
 
-    function getSampleSize(isThroughput, mediaType, isLive) {
+    function getSamples(isThroughput, mediaType, isLive) {
         let arr;
         let sampleSize;
 
@@ -132,37 +131,31 @@ function ThroughputHistory(config) {
             }
         }
 
-        return sampleSize;
-    }
-
-    function getAverage(isThroughput, mediaType, isDynamic) {
-        let sampleSize = getSampleSize(isThroughput, mediaType, isDynamic);
-        let dict = isThroughput ? throughputDict : latencyDict;
-        let arr = dict[mediaType];
-
-        if (sampleSize === 0 || !arr || arr.length === 0) {
-            return NaN;
-        }
-
-        arr = arr.slice(-sampleSize); // still works if sampleSize too large
-        // arr.length >= 1
-        return arr.reduce((total, elem) => total + elem) / arr.length;
+        return (sampleSize === 0 || !arr || arr.length === 0) ? [] : arr.slice(-sampleSize);
     }
 
     function getAverageThroughput(mediaType, isDynamic) {
-        return getAverage(true, mediaType, isDynamic);
+        let samples = getSamples(true, mediaType, isDynamic);
+
+        if (samples) {
+            let [bits, milliseconds] = samples.reduce(([a, b], {bit, ms}) => [a + bit, b + ms], [0,0]);
+            return Math.round(bits / milliseconds); // bit/ms = kbit/s
+        } else {
+            return NaN;
+        }
     }
 
     function getSafeAverageThroughput(mediaType, isDynamic) {
-        let average = getAverageThroughput(mediaType, isDynamic);
-        if (!isNaN(average)) {
-            average *= mediaPlayerModel.getBandwidthSafetyFactor();
-        }
-        return average;
+        return getAverageThroughput(mediaType, isDynamic) * mediaPlayerModel.getBandwidthSafetyFactor();
     }
 
     function getAverageLatency(mediaType) {
-        return getAverage(false, mediaType);
+        let samples = getSamples(false, mediaType);
+        if (samples) {
+            return samples.reduce((total, elem) => total + elem, 0) / samples.length;
+        } else {
+            return NaN;
+        }
     }
 
     function reset() {
