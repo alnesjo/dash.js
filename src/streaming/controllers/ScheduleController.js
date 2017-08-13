@@ -410,7 +410,19 @@ function ScheduleController(config) {
         }
     }
 
-    function onPlaybackTimeUpdated() {
+    function onPlaybackTimeUpdated({time}) {
+        const videoMetrics = metricsModel.getReadOnlyMetricsFor('video');
+        const throughputHistory = abrController.getThroughputHistory();
+        let now = new Date() / 1000;
+        let delay = now - time;
+        let buffer = dashMetrics.getCurrentBufferLevel(videoMetrics);
+        let throughput = throughputHistory ? throughputHistory.getAverageThroughput('video') : 0;
+
+        log('livestat', 'timeupdate',
+            'delay:', delay.toFixed(3),
+            'buffer:', buffer.toFixed(3),
+            'throughput:', throughput.toFixed(3));
+
         completeQualityChange(true);
     }
 

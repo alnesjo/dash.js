@@ -2376,6 +2376,7 @@ function MediaPlayer() {
 
             playbackInitialized = true;
             log('Playback Initialized');
+            log('livestat', 'start');
 
             if (typeof source === 'string') {
                 streamController.load(source);
