@@ -70,18 +70,20 @@ const FetchLoader = function (cfg) {
             let traces = [];
             request.requestStartDate = new Date();
 
-            log(request.requestStartDate.getTime(), 'livestat',
-                'segment request delay:', request.requestStartDate - request.availabilityStartTime);
+            let requestDelay = (request.requestStartDate - request.availabilityStartTime) / 1000;
+            log('livestat', 'loading',
+                'index:', request.index,
+                'request delay:', requestDelay.toFixed(3));
 
             const progress = (function () {
                 let then;
                 let remaining = new Uint8Array();
 
                 /**
-                 * Concatenates two typed arrays by the construction of a new one.
                  * @param {TypedArray} a
                  * @param {TypedArray} b
-                 * @returns {TypedArray}
+                 * @returns {TypedArray} New array consisting of the elements of <code>a</code>, followed by the
+                 * elements of <code>b</code>.
                  */
                 const concatTypedArray = function (a, b) {
                     if (a.constructor !== b.constructor) {
@@ -95,10 +97,8 @@ const FetchLoader = function (cfg) {
                 };
 
                 /**
-                 * Returns a section of complete CMAF chunks and the remaining data. Both <code>ready</code> and
-                 * <code>remaining</code> may be empty.
                  * @param {TypedArray} data
-                 * @returns {TypedArray []} ready, remaining
+                 * @returns {TypedArray []} Tuple containing completed CMAF chunks and the remaining data.
                  */
                 const getReady = function (data) {
                     let boxes = ISOBoxer.parseBuffer(data.buffer).boxes;
