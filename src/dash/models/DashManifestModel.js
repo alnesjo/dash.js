@@ -643,15 +643,12 @@ function DashManifestModel(config) {
         if (manifest) {
             mpd.manifest = manifest;
 
+            const [baseUrl] = getBaseURLsFromElement(manifest);
+
             if (manifest.hasOwnProperty(DashConstants.AVAILABILITY_START_TIME)) {
-                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime.getTime());
+                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime - 1000 * baseUrl.availabilityTimeOffset);
             } else {
                 mpd.availabilityStartTime = new Date(manifest.loadedTime.getTime());
-            }
-
-            if (manifest.hasOwnProperty(DashConstants.BASE_URL) &&
-                manifest.BaseURL.hasOwnProperty(DashConstants.AVAILABILITY_TIME_OFFSET)) {
-                mpd.availabilityStartTime = new Date(mpd.availabilityStartTime - 1000 * manifest.BaseURL.availabilityTimeOffset);
             }
 
             if (manifest.hasOwnProperty(DashConstants.AVAILABILITY_END_TIME)) {
@@ -911,9 +908,15 @@ function DashManifestModel(config) {
                     baseUrl.dvb_weight = entry[DashConstants.DVB_WEIGHT];
                 }
 
-                /* NOTE: byteRange, availabilityTimeOffset,
-                 * availabilityTimeComplete currently unused
-                 */
+                if (entry.hasOwnProperty(DashConstants.AVAILABILITY_TIME_COMPLETE)) {
+                    baseUrl.availabilityTimeComplete = entry[DashConstants.AVAILABILITY_TIME_COMPLETE];
+                }
+
+                if (entry.hasOwnProperty(DashConstants.AVAILABILITY_TIME_OFFSET)) {
+                    baseUrl.availabilityTimeOffset = entry[DashConstants.AVAILABILITY_TIME_OFFSET];
+                }
+
+                // NOTE: byteRange currently unused
 
                 baseUrls.push(baseUrl);
 

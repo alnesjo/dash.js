@@ -40,16 +40,14 @@ class BaseURL {
     constructor(url, serviceLocation, priority, weight) {
         this.url = url || '';
         this.serviceLocation = serviceLocation || url || '';
+        this.availabilityTimeComplete = true;
+        this.availabilityTimeOffset = 0;
 
         // DVB extensions
         this.dvb_priority = priority || DEFAULT_DVB_PRIORITY;
         this.dvb_weight = weight || DEFAULT_DVB_WEIGHT;
 
-        /* currently unused:
-         * byteRange,
-         * availabilityTimeOffset,
-         * availabilityTimeComplete
-         */
+        // currently unused: byteRange
     }
 }
 
