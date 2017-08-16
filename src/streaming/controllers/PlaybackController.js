@@ -135,6 +135,12 @@ function PlaybackController() {
         return videoModel ? videoModel.getPlaybackRate() : null;
     }
 
+    function setPlaybackRate(rate) {
+        if (videoModel) {
+            videoModel.setPlaybackRate(rate);
+        }
+    }
+
     function getPlayedRanges() {
         return videoModel ? videoModel.getPlayedRanges() : null;
     }
@@ -545,6 +551,7 @@ function PlaybackController() {
         getTimeToStreamEnd: getTimeToStreamEnd,
         getTime: getTime,
         getPlaybackRate: getPlaybackRate,
+        setPlaybackRate: setPlaybackRate,
         getPlayedRanges: getPlayedRanges,
         getEnded: getEnded,
         getIsDynamic: getIsDynamic,

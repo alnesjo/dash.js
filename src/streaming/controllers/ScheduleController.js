@@ -183,7 +183,7 @@ function ScheduleController(config) {
 
         validateExecutedFragmentRequest();
 
-        const retryInterval = 100;
+        const retryInterval = 500;
         const isReplacement = replaceRequestArray.length > 0;
         const topQualityIndexChanged = hasTopQualityChanged(currentRepresentationInfo.mediaInfo.type, streamProcessor.getStreamInfo().id);
         const bufferUnsatisfied = bufferLevelRule.execute(streamProcessor, type, streamController.isVideoTrackPresent());
@@ -408,6 +408,21 @@ function ScheduleController(config) {
             isFragmentProcessingInProgress = false;
             startScheduleTimer(0);
         }
+
+        // setLiveEdgeSeekTarget();
+        // const time = playbackController.getTime();
+        // const computedDelay = playbackController.computeLiveDelay(
+        //     currentRepresentationInfo.fragmentDuration,
+        //     currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2
+        // );
+        // const [lowerThreshold, upperThreshold] = [seekTarget - computedDelay, seekTarget];
+        // if (playbackController.getPlaybackRate() <= 1 && time < lowerThreshold) {
+        //     log('livestat', 'live edge maintenance', 'begin');
+        //     playbackController.setPlaybackRate(1.1);
+        // } else if (1 < playbackController.getPlaybackRate() &&  upperThreshold <= time) {
+        //     playbackController.setPlaybackRate(1);
+        //     log('livestat', 'live edge maintenance', 'end');
+        // }
     }
 
     function onPlaybackTimeUpdated({time}) {
