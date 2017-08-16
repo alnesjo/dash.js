@@ -28,23 +28,20 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-/**
- * Created by robert on 2017-05-10.
- */
-/* global Headers: false */
 
 import {HTTPRequest} from './vo/metrics/HTTPRequest';
 import FactoryMaker from '../core/FactoryMaker';
 import ErrorHandler from './utils/ErrorHandler.js';
 import Debug from '../core/Debug';
 import ISOBoxer from 'codem-isoboxer';
+/* global Headers: false */
 
 /**
  * @module FetchLoader
  * @description Manages download of resources via HTTP.
- * @param {Object} cfg - dependancies from parent
+ * @param {Object} cfg - dependencies from parent
  */
-function FetchLoader(cfg) {
+const FetchLoader = function (cfg) {
     const context = this.context;
 
     const log = Debug(context).getInstance().log;
@@ -54,7 +51,6 @@ function FetchLoader(cfg) {
     const mediaPlayerModel = cfg.mediaPlayerModel;
     const requestModifier = cfg.requestModifier;
 
-    let retryTimers = [];
     const downloadErrorToRequestTypeMap = {
         [HTTPRequest.MPD_TYPE]:                         ErrorHandler.DOWNLOAD_ERROR_ID_MANIFEST,
         [HTTPRequest.XLINK_EXPANSION_TYPE]:             ErrorHandler.DOWNLOAD_ERROR_ID_XLINK,
@@ -65,7 +61,9 @@ function FetchLoader(cfg) {
         [HTTPRequest.OTHER_TYPE]:                       ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT
     };
 
-    function internalLoad(config, remainingAttempts) {
+    let retryTimers = [];
+
+    const internalLoad = function (config, remainingAttempts) {
         let request = config.request;
 
         const fetcher = (function () {
@@ -75,19 +73,29 @@ function FetchLoader(cfg) {
             const progress = (function () {
                 let then;
                 let remaining = new Uint8Array();
-                let trace = true;
 
-                function concatTypedArray(a, b) {
+                /**
+                 * @param {TypedArray} a
+                 * @param {TypedArray} b
+                 * @returns {TypedArray} New array consisting of the elements of <code>a</code>, followed by the
+                 * elements of <code>b</code>.
+                 */
+                const concatTypedArray = function (a, b) {
                     if (a.constructor !== b.constructor) {
-                        throw new TypeError('Both');
+                        throw new TypeError('Type mismatch. Expected: ' + a.constructor.name +
+                            ', but got: ' + b.constructor.name + '.');
                     }
                     let c = new a.constructor(a.length + b.length);
                     c.set(a);
                     c.set(b, a.length);
                     return c;
-                }
+                };
 
-                function getReady(data) {
+                /**
+                 * @param {TypedArray} data
+                 * @returns {TypedArray []} Tuple containing completed CMAF chunks and the remaining data.
+                 */
+                const getReady = function (data) {
                     let boxes = ISOBoxer.parseBuffer(data.buffer).boxes;
                     let end = 0;
                     for (let i = 0; i < boxes.length; i++) {
@@ -98,33 +106,36 @@ function FetchLoader(cfg) {
                         }
                     }
                     return [data.subarray(0, end), data.subarray(end)];
-                }
+                };
 
+                /**
+                 * Loading progress parsing and reporting.
+                 * @param {Uint8Array} progress
+                 */
                 return function (progress) {
                     let now = new Date();
                     then = then || now;
                     if (progress) {
-                        if (trace) {
-                            traces.push({
-                                s: then,
-                                d: now - then,
-                                b: [progress.length]
-                            });
-                        }
+                        traces.push({
+                            s: then,
+                            d: now - then,
+                            b: [progress.length]
+                        });
                         let ready;
                         [ready, remaining] = getReady(concatTypedArray(remaining, progress));
                         if (0 < ready.length && config.progress) {
                             config.progress(ready);
-                            // trace = false; // Stop tracing after first chunk and according to expectations, there are no time gaps in the trace
-                            // window.console.assert(0 === traces.map(({s, d}) => [s.getTime(), s.getTime() + d]).reduce(([acc, end],[b, e]) => [acc + b - (end || b), e], [0, NaN])[0]);
                         }
                         then = (0 < remaining.length) ? now : undefined;
                     }
                 };
             })();
 
+            /**
+             * Fetch resource specified by <code>config.request</code>.
+             */
             return function () {
-                fetch(requestModifier.modifyRequestURL(request.url), (() => {
+                fetch(requestModifier.modifyRequestURL(request.url), (function () {
                     let headers = new Headers();
                     if (request.range) {
                         headers.append('Range', 'bytes=' + request.range);
@@ -134,7 +145,7 @@ function FetchLoader(cfg) {
                         headers: headers,
                         mode: mediaPlayerModel.getXHRWithCredentialsForType(request.type)
                     };
-                })()).then(({status, statusText, url, headers, body}) => {
+                })()).then(function ({status, statusText, url, headers, body}) {
                     request.firstByteDate = new Date();
                     progress();
                     let headersString = '';
@@ -147,9 +158,9 @@ function FetchLoader(cfg) {
                         headers: headersString,
                         reader: body.getReader()
                     };
-                }).then(({url, status, statusText, headers, reader}) => {
+                }).then(function ({url, status, statusText, headers, reader}) {
                     request.bytesLoaded = 0;
-                    const consume = ({value, done}) => {
+                    const consume = function ({value, done}) {
                         if (done) {
                             request.requestEndDate = new Date();
                             request.bytesTotal = request.bytesLoaded;
@@ -166,7 +177,7 @@ function FetchLoader(cfg) {
                         return reader.read().then(consume);
                     };
                     return reader.read().then(consume);
-                }).then(({url, status, statusText, headers}) => {
+                }).then(function ({url, status, statusText, headers}) {
                     let success = status >= 200 && status <= 299;
                     if (success) {
                         progress();
@@ -211,7 +222,11 @@ function FetchLoader(cfg) {
                             success ? traces : null
                         );
                     }
-                }).catch((error) => {
+                    let timePassed = (request.requestEndDate - request.requestStartDate) / 1000;
+                    log('livestat', 'loadend',
+                        'index:', request.index,
+                        'time passed:', timePassed.toFixed(3));
+                }).catch(function (error) {
                     log(error.message);
                 });
             };
@@ -226,7 +241,7 @@ function FetchLoader(cfg) {
             // Can keep track of timeouts and abort them before they are dispatched!
             setTimeout(fetcher, (request.delayLoadingTime - now));
         }
-    }
+    };
 
     /**
      * Initiates a download of the resource described by config.request
@@ -234,31 +249,26 @@ function FetchLoader(cfg) {
      * @memberof module:FetchLoader
      * @instance
      */
-    function load(config) {
+    const load = function (config) {
         if (config.request) {
-            internalLoad(
-                config,
-                mediaPlayerModel.getRetryAttemptsForType(
-                    config.request.type
-                )
-            );
+            internalLoad(config, mediaPlayerModel.getRetryAttemptsForType(config.request.type));
         }
-    }
+    };
 
     /**
      * Aborts any inflight downloads
      * @memberof module:FetchLoader
      * @instance
      */
-    function abort() {
+    const abort = function () {
         window.console.warn(abort.name, 'is not implemented.');
-    }
+    };
 
     return {
         load: load,
         abort: abort
     };
-}
+};
 
 FetchLoader.__dashjs_factory_name = 'FetchLoader';
 

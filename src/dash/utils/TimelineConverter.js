@@ -63,7 +63,8 @@ function TimelineConverter() {
     }
 
     function setClientTimeOffset(value) {
-        clientServerTimeShift = value;
+        window.console.warn(setClientTimeOffset.name, 'ignoring', value);
+        //clientServerTimeShift = value;
     }
 
     function getExpectedLiveEdge() {
@@ -75,8 +76,6 @@ function TimelineConverter() {
     }
 
     function calcAvailabilityTimeFromPresentationTime(presentationTime, mpd, isDynamic, calculateEnd) {
-        const [baseUrl] = mpd.baseUrls;
-        const adjustedAvailabilityStartTime = new Date(mpd.availabilityStartTime - 1000 * baseUrl.availabilityTimeOffset);
         let availabilityTime = NaN;
 
         if (calculateEnd) {
@@ -84,17 +83,16 @@ function TimelineConverter() {
             // to be available for a Media Presentation with type 'dynamic'.
             // When not present, the value is infinite.
             if (isDynamic && (mpd.timeShiftBufferDepth != Number.POSITIVE_INFINITY)) {
-                availabilityTime = new Date(adjustedAvailabilityStartTime.getTime() + 1000 * (presentationTime + mpd.timeShiftBufferDepth));
+                availabilityTime = new Date(mpd.availabilityStartTime.getTime() + ((presentationTime + mpd.timeShiftBufferDepth) * 1000));
             } else {
                 availabilityTime = mpd.availabilityEndTime;
             }
         } else {
             if (isDynamic) {
-                // TODO what is clientServerTimeShift and why is it not negated in calcPresentationTimeFromWallTime?
-                availabilityTime = new Date(adjustedAvailabilityStartTime.getTime() + 1000 * (presentationTime - clientServerTimeShift));
+                availabilityTime = new Date(mpd.availabilityStartTime.getTime() + (presentationTime - clientServerTimeShift) * 1000);
             } else {
                 // in static mpd, all segments are available at the same time
-                availabilityTime = adjustedAvailabilityStartTime;
+                availabilityTime = mpd.availabilityStartTime;
             }
         }
 
@@ -110,12 +108,8 @@ function TimelineConverter() {
     }
 
     function calcPresentationTimeFromWallTime(wallTime, period) {
-        const mpd = period.mpd;
-        const [baseUrl] = mpd.baseUrls;
-        const adjustedAvailabilityStartTime = new Date(mpd.availabilityStartTime - 1000 * baseUrl.availabilityTimeOffset);
-        // TODO what is clientServerTimeShift and why is it used negated in calcAvailabilityTimeFromPresentationTime?
-        //window.console.log('XXX', new Date(wallTime - adjustedAvailabilityStartTime), clientServerTimeShift * 1000, clientServerTimeShift, period.mpd.availabilityStartTime.getTime());
-        return (wallTime - adjustedAvailabilityStartTime) / 1000 + clientServerTimeShift;
+        //console.log("XXX", wallTime.getTime() - period.mpd.availabilityStartTime.getTime(), clientServerTimeShift * 1000, clientServerTimeShift, period.mpd.availabilityStartTime.getTime())
+        return ((wallTime.getTime() - period.mpd.availabilityStartTime.getTime() + clientServerTimeShift * 1000) / 1000);
     }
 
     function calcPresentationTimeFromMediaTime(mediaTime, representation) {
@@ -133,8 +127,6 @@ function TimelineConverter() {
     }
 
     function calcWallTimeForSegment(segment, isDynamic) {
-        const [baseUrl] = segment.representation.adaptation.period.mpd.baseUrls;
-        const adjustedAvailabilityStartTime = new Date(segment.availabilityStartTime - 1000 * baseUrl.availabilityTimeOffset);
         let suggestedPresentationDelay,
             displayStartTime,
             wallTime;
@@ -142,7 +134,7 @@ function TimelineConverter() {
         if (isDynamic) {
             suggestedPresentationDelay = segment.representation.adaptation.period.mpd.suggestedPresentationDelay;
             displayStartTime = segment.presentationStartTime + suggestedPresentationDelay;
-            wallTime = new Date(adjustedAvailabilityStartTime.getTime() + (displayStartTime * 1000));
+            wallTime = new Date(segment.availabilityStartTime.getTime() + (displayStartTime * 1000));
         }
 
         return wallTime;

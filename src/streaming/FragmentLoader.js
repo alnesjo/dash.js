@@ -99,15 +99,17 @@ function FragmentLoader(config) {
                 progress: function (data) {
                     report(Events.LOADING_PROGRESS, data);
                 },
-                success: function () {
-                    report(Events.LOADING_COMPLETED);
+                success: function (data) {
+                    report(Events.LOADING_COMPLETED, data);
                 },
-                error: function (_, statusText, errorText) {
-                    report(Events.LOADING_COMPLETED, undefined, new DashJSError(FRAGMENT_LOADER_ERROR_LOADING_FAILURE, errorText, statusText));
+                error: function (xhr, statusText, errorText) {
+                    report(Events.LOADING_COMPLETED, undefined,
+                        new DashJSError(FRAGMENT_LOADER_ERROR_LOADING_FAILURE, errorText, statusText));
                 }
             });
         } else {
-            report(Events.LOADING_COMPLETED, undefined, new DashJSError(FRAGMENT_LOADER_ERROR_NULL_REQUEST, FRAGMENT_LOADER_MESSAGE_NULL_REQUEST));
+            report(Events.LOADING_COMPLETED, undefined,
+                new DashJSError(FRAGMENT_LOADER_ERROR_NULL_REQUEST, FRAGMENT_LOADER_MESSAGE_NULL_REQUEST));
         }
     }
 

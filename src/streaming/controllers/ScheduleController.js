@@ -83,18 +83,8 @@ function ScheduleController(config) {
 
     function setup() {
         log = Debug(context).getInstance().log.bind(instance);
-        initialRequest = true;
-        lastInitQuality = NaN;
-        lastQualityIndex = NaN;
-        topQualityIndex = {};
-        replaceRequestArray = [];
-        isStopped = true;
-        playListMetrics = null;
-        playListTraceMetrics = null;
-        playListTraceMetricsClosed = true;
-        isFragmentProcessingInProgress = false;
-        timeToLoadDelay = 0;
-        seekTarget = NaN;
+
+        reset();
     }
 
 
@@ -187,17 +177,17 @@ function ScheduleController(config) {
 
     function schedule() {
 
-        if (isStopped || isFragmentProcessingInProgress || !streamProcessor.getBufferController() || playbackController.isPaused() && !scheduleWhilePaused) {
+        if (isStopped || isFragmentProcessingInProgress || !streamProcessor || !streamProcessor.getBufferController() || playbackController.isPaused() && !scheduleWhilePaused) {
             return;
         }
 
         validateExecutedFragmentRequest();
 
+        const retryInterval = 500;
         const isReplacement = replaceRequestArray.length > 0;
-        if (switchTrack || isReplacement ||
-            hasTopQualityChanged(currentRepresentationInfo.mediaInfo.type, streamProcessor.getStreamInfo().id) ||
-            bufferLevelRule.execute(streamProcessor, type, streamController.isVideoTrackPresent())
-        ) {
+        const topQualityIndexChanged = hasTopQualityChanged(currentRepresentationInfo.mediaInfo.type, streamProcessor.getStreamInfo().id);
+        const bufferUnsatisfied = bufferLevelRule.execute(streamProcessor, type, streamController.isVideoTrackPresent());
+        if (switchTrack || isReplacement || topQualityIndexChanged || bufferUnsatisfied) {
 
             const getNextFragment = function () {
                 log('ScheduleController - getNextFragment');
@@ -225,7 +215,7 @@ function ScheduleController(config) {
                         } else { //Use case - Playing at the bleeding live edge and frag is not available yet. Cycle back around.
                             log('getNextFragment - Playing at the bleeding live edge and frag is not available yet');
                             isFragmentProcessingInProgress = false;
-                            startScheduleTimer(500);
+                            startScheduleTimer(retryInterval);
                         }
                     }
                 }
@@ -240,7 +230,7 @@ function ScheduleController(config) {
             }
 
         } else {
-            startScheduleTimer(500);
+            startScheduleTimer(retryInterval);
         }
     }
 
@@ -318,7 +308,7 @@ function ScheduleController(config) {
     }
 
     function completeQualityChange(trigger) {
-        if (playbackController) {
+        if (playbackController && fragmentModel) {
             const item = fragmentModel.getRequests({
                 state: FragmentModel.FRAGMENT_MODEL_EXECUTED,
                 time: playbackController.getTime(),
@@ -372,19 +362,13 @@ function ScheduleController(config) {
         if (liveEdgeFinder) {
             const liveEdge = liveEdgeFinder.getLiveEdge();
             const dvrWindowSize = currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2;
-            const additionalDelay = playbackController.computeLiveDelay(currentRepresentationInfo.fragmentDuration, dvrWindowSize);
-            // TODO Need to know chunk duration before playback to choose an appropriate buffer level, ATO is only good for live edge
-            log('livestat', 'live edge delay:', new Date() - Math.round(1000 * liveEdge), 'estimated additional delay:', additionalDelay, 'expected fragment duration:', currentRepresentationInfo.fragmentDuration);
-            const startTime = liveEdge - additionalDelay;
-            const request = adapter.getFragmentRequestForTime(streamProcessor, currentRepresentationInfo, startTime, {
-                ignoreIsFinished: true
-            });
+            const startTime = liveEdge - playbackController.computeLiveDelay(currentRepresentationInfo.fragmentDuration, dvrWindowSize);
             seekTarget = playbackController.getLiveStartTime();
             if (isNaN(seekTarget) || startTime > seekTarget) {
                 //special use case for multi period stream. If the startTime is out of the current period, send a seek command.
                 //in onPlaybackSeeking callback (StreamController), the detection of switch stream is done.
-                if (request.startTime > (currentRepresentationInfo.mediaInfo.streamInfo.start + currentRepresentationInfo.mediaInfo.streamInfo.duration)) {
-                    playbackController.seek(request.startTime);
+                if (startTime > (currentRepresentationInfo.mediaInfo.streamInfo.start + currentRepresentationInfo.mediaInfo.streamInfo.duration)) {
+                    playbackController.seek(startTime);
                 }
                 playbackController.setLiveStartTime(startTime);
                 seekTarget = startTime;
@@ -424,9 +408,33 @@ function ScheduleController(config) {
             isFragmentProcessingInProgress = false;
             startScheduleTimer(0);
         }
+
+        // setLiveEdgeSeekTarget();
+        // const time = playbackController.getTime();
+        // const computedDelay = playbackController.computeLiveDelay(
+        //     currentRepresentationInfo.fragmentDuration,
+        //     currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2
+        // );
+        // const [lowerThreshold, upperThreshold] = [seekTarget - computedDelay, seekTarget];
+        // if (playbackController.getPlaybackRate() <= 1 && time < lowerThreshold) {
+        //     log('livestat', 'live edge maintenance', 'begin');
+        //     playbackController.setPlaybackRate(1.1);
+        // } else if (1 < playbackController.getPlaybackRate() &&  upperThreshold <= time) {
+        //     playbackController.setPlaybackRate(1);
+        //     log('livestat', 'live edge maintenance', 'end');
+        // }
     }
 
-    function onPlaybackTimeUpdated() {
+    function onPlaybackTimeUpdated({time}) {
+        let delay = playbackController.getIsDynamic() ? new Date() / 1000 - time : NaN;
+        const videoMetrics = metricsModel.getReadOnlyMetricsFor('video');
+        const throughputHistory = abrController.getThroughputHistory();
+        const buffer = dashMetrics.getCurrentBufferLevel(videoMetrics);
+        const throughput = throughputHistory ? throughputHistory.getAverageThroughput('video') : 0;
+        log('livestat', 'timeupdate',
+            'delay:', delay.toFixed(3),
+            'buffer:', buffer.toFixed(3),
+            'throughput:', throughput.toFixed(3));
         completeQualityChange(true);
     }
 
@@ -617,6 +625,14 @@ function ScheduleController(config) {
         timeToLoadDelay = 0;
         seekTarget = NaN;
         playListMetrics = null;
+        playListTraceMetrics = null;
+        playListTraceMetricsClosed = true;
+        initialRequest = true;
+        lastInitQuality = NaN;
+        lastQualityIndex = NaN;
+        topQualityIndex = {};
+        replaceRequestArray = [];
+        isStopped = true;
     }
 
     instance = {

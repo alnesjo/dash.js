@@ -643,8 +643,10 @@ function DashManifestModel(config) {
         if (manifest) {
             mpd.manifest = manifest;
 
+            const [baseUrl] = getBaseURLsFromElement(manifest);
+
             if (manifest.hasOwnProperty(DashConstants.AVAILABILITY_START_TIME)) {
-                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime);
+                mpd.availabilityStartTime = new Date(manifest.availabilityStartTime - 1000 * baseUrl.availabilityTimeOffset);
             } else {
                 mpd.availabilityStartTime = new Date(manifest.loadedTime.getTime());
             }
@@ -672,8 +674,6 @@ function DashManifestModel(config) {
             if (manifest.hasOwnProperty(DashConstants.MAX_SEGMENT_DURATION)) {
                 mpd.maxSegmentDuration = manifest.maxSegmentDuration;
             }
-
-            mpd.baseUrls = getBaseURLsFromElement(manifest);
         }
 
         return mpd;
@@ -882,7 +882,7 @@ function DashManifestModel(config) {
                     // entries exist, that case is handled by the
                     // [node.baseUri] in the entries definition.
                     if (node.baseUri) {
-                        text = node.baseUri + text;
+                        text = urlUtils.resolve(text, node.baseUri);
                     }
                 }
 
@@ -908,12 +908,12 @@ function DashManifestModel(config) {
                     baseUrl.dvb_weight = entry[DashConstants.DVB_WEIGHT];
                 }
 
-                if (entry.hasOwnProperty(DashConstants.AVAILABILITY_TIME_OFFSET)) {
-                    baseUrl.availabilityTimeOffset = entry[DashConstants.AVAILABILITY_TIME_OFFSET];
-                }
-
                 if (entry.hasOwnProperty(DashConstants.AVAILABILITY_TIME_COMPLETE)) {
                     baseUrl.availabilityTimeComplete = entry[DashConstants.AVAILABILITY_TIME_COMPLETE];
+                }
+
+                if (entry.hasOwnProperty(DashConstants.AVAILABILITY_TIME_OFFSET)) {
+                    baseUrl.availabilityTimeOffset = entry[DashConstants.AVAILABILITY_TIME_OFFSET];
                 }
 
                 // NOTE: byteRange currently unused

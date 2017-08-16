@@ -52,8 +52,7 @@ function ThroughputHistory(config) {
         latencyDict;
 
     function setup() {
-        throughputDict = {};
-        latencyDict = {};
+        reset();
     }
 
     function isCachedResponse(mediaType, latencyMs, downloadTimeMs) {
@@ -78,13 +77,12 @@ function ThroughputHistory(config) {
         latencyDict[mediaType] = latencyDict[mediaType] || [];
 
         if (isCachedResponse(mediaType, latencyTimeInMilliseconds, downloadTimeInMilliseconds)) {
-            if (0 < throughputDict[mediaType].length && !throughputDict[mediaType].hasCachedEntries) {
+            if (throughputDict[mediaType].length > 0 && !throughputDict[mediaType].hasCachedEntries) {
                 // already have some entries which are not cached entries
                 // prevent cached fragment loads from skewing the average values
                 return;
             } else { // have no entries || have cached entries
-                // no uncached entries yet, rely on cached entries, set allowance for ABR rules
-                // throughput /= 1000;
+                // no uncached entries yet, rely on cached entries because ABR rules need something to go by
                 throughputDict[mediaType].hasCachedEntries = true;
             }
         } else if (throughputDict[mediaType] && throughputDict[mediaType].hasCachedEntries) {
@@ -132,11 +130,13 @@ function ThroughputHistory(config) {
                 }
             }
         }
+
         return (sampleSize === 0 || !arr || arr.length === 0) ? [] : arr.slice(-sampleSize);
     }
 
     function getAverageThroughput(mediaType, isDynamic) {
         let samples = getSamples(true, mediaType, isDynamic);
+
         if (samples) {
             let [bits, milliseconds] = samples.reduce(([a, b], {bit, ms}) => [a + bit, b + ms], [0,0]);
             return Math.round(bits / milliseconds); // bit/ms = kbit/s
@@ -159,7 +159,8 @@ function ThroughputHistory(config) {
     }
 
     function reset() {
-        setup();
+        throughputDict = {};
+        latencyDict = {};
     }
 
     const instance = {

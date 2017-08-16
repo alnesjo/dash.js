@@ -55,11 +55,10 @@ function FragmentModel(config) {
         loadingRequests;
 
     function setup() {
-        streamProcessor = null;
-        executedRequests = [];
-        loadingRequests = [];
+        resetInitialSettings();
         eventBus.on(Events.LOADING_COMPLETED, onLoadingCompleted, instance);
         eventBus.on(Events.LOADING_PROGRESS, onLoadingProgress, instance);
+
     }
 
     function setStreamProcessor(value) {
@@ -249,23 +248,16 @@ function FragmentModel(config) {
         metricsModel.addRequestsQueue(request.mediaType, loadingRequests, executedRequests);
     }
 
-    function onLoadingCompleted({request, response, error, sender}) {
-        if (sender !== fragmentLoader) return;
-        // TODO REMOVE
-    }
-
     function onLoadingProgress({request, response, error, sender}) {
         if (sender !== fragmentLoader) return;
 
-        let idx = loadingRequests.indexOf(request);
+        const idx = loadingRequests.indexOf(request);
         if (-1 !== idx) {
-            addSchedulingInfoMetrics(request, error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
-
             loadingRequests.splice(idx, 1);
-
             if (response && !error) {
                 executedRequests.push(request);
             }
+            addSchedulingInfoMetrics(request, error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
         }
 
         eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
@@ -276,16 +268,39 @@ function FragmentModel(config) {
         });
     }
 
+    function onLoadingCompleted(e) {
+        if (e.sender !== fragmentLoader) return;
+
+        // loadingRequests.splice(loadingRequests.indexOf(e.request), 1);
+        //
+        // if (e.response && !e.error) {
+        //     executedRequests.push(e.request);
+        // }
+        //
+        // addSchedulingInfoMetrics(e.request, e.error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
+        //
+        // eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
+        //     request: e.request,
+        //     response: e.response,
+        //     error: e.error,
+        //     sender: this
+        // });
+    }
+
+    function resetInitialSettings() {
+        executedRequests = [];
+        loadingRequests = [];
+    }
+
     function reset() {
         eventBus.off(Events.LOADING_COMPLETED, onLoadingCompleted, this);
         eventBus.off(Events.LOADING_PROGRESS, onLoadingProgress, this);
 
+
         if (fragmentLoader) {
             fragmentLoader.reset();
         }
-
-        executedRequests = [];
-        loadingRequests = [];
+        resetInitialSettings();
     }
 
     instance = {

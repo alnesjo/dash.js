@@ -2,10 +2,6 @@
 
 var app = angular.module('DashPlayer', ['DashSourcesService', 'DashContributorsService', 'angular-flot']);
 
-function livestat() {
-    window.console.log('livestat', '[' + new Date().getTime() + ']', ...arguments);
-}
-
 $(document).ready(function () {
     $('[data-toggle="tooltip"]').tooltip();
     $('#drmLicenseForm').hide();
@@ -31,9 +27,10 @@ angular.module('DashContributorsService', ['ngResource']).factory('contributors'
 
 app.controller('DashController', function ($scope, sources, contributors) {
 
+    var log = window.console.log;
 
     $scope.selectedItem = {
-        url: 'http://10.16.48.5:8059/livesim/chunkdur_1/ato_7/testpic4_8s/Manifest.mpd'
+        url: 'http://localhost:8059/livesim/chunkdur_1/ato_7/testpic4_8s/Manifest.mpd'
     };
 
     sources.query(function (data) {
@@ -205,9 +202,10 @@ app.controller('DashController', function ($scope, sources, contributors) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
     }
 
-    $scope.player.setLiveDelay(0);
+    $scope.player.setLiveDelay(1);
     $scope.player.setLiveDelayFragmentCount(0);
-    $scope.player.setFragmentLoaderRetryAttempts(10);
+    //$scope.player.setStableBufferTime(12);
+    $scope.player.setFragmentLoaderRetryAttempts(100);
     $scope.player.setFragmentLoaderRetryInterval(100);
 
     // get buffer default value
@@ -258,13 +256,6 @@ app.controller('DashController', function ($scope, sources, contributors) {
             $scope.doLoad();
         }
     }, $scope);
-
-    $scope.video.addEventListener('timeupdate', function () {
-        var now = new Date().getTime();
-        var playback = $scope.video.currentTime * 1000;
-        var [throughputAudio, throughputVideo] = ['audio', 'video'].map($scope.player.getAverageThroughput);
-        livestat('timeupdate', 'delay:', (now - playback).toFixed(0), 'bandwidth (A+V):', throughputAudio.toFixed(0), '+', throughputVideo.toFixed(0));
-    }, true);
 
 
     ////////////////////////////////////////
@@ -539,8 +530,6 @@ app.controller('DashController', function ($scope, sources, contributors) {
     };
 
     $scope.doLoad = function () {
-
-        livestat('load start');
 
         $scope.initSession();
 

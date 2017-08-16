@@ -28,21 +28,22 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-/**
- * @class
- * @ignore
- */
-class Mpd {
-    constructor() {
-        this.manifest = null;
-        this.suggestedPresentationDelay = 0;
-        this.availabilityStartTime = null;
-        this.availabilityEndTime = Number.POSITIVE_INFINITY;
-        this.timeShiftBufferDepth = Number.POSITIVE_INFINITY;
-        this.maxSegmentDuration = Number.POSITIVE_INFINITY;
-        this.minimumUpdatePeriod = NaN;
-        this.mediaPresentationDuration = NaN;
-    }
+
+import MediaPlayer from './src/streaming/MediaPlayer';
+import FactoryMaker from './src/core/FactoryMaker';
+import {getVersionString} from './src/core/Version';
+
+// Shove both of these into the global scope
+var context = (typeof window !== 'undefined' && window) || global;
+
+var dashjs = context.dashjs;
+if (!dashjs) {
+    dashjs = context.dashjs = {};
 }
 
-export default Mpd;
+dashjs.MediaPlayer = MediaPlayer;
+dashjs.FactoryMaker = FactoryMaker;
+dashjs.Version = getVersionString();
+
+export default dashjs;
+export { MediaPlayer, FactoryMaker};

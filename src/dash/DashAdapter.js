@@ -82,21 +82,17 @@ function DashAdapter() {
 
     function convertRepresentationToTrackInfo(voRepresentation) {
         let trackInfo = new TrackInfo();
-        const realAdaptation = voRepresentation.adaptation.period.mpd.manifest.Period_asArray[voRepresentation.adaptation.period.index].AdaptationSet_asArray[voRepresentation.adaptation.index];
+        const mpd = voRepresentation.adaptation.period.mpd;
+        const realAdaptation = mpd.manifest.Period_asArray[voRepresentation.adaptation.period.index].AdaptationSet_asArray[voRepresentation.adaptation.index];
         const realRepresentation = dashManifestModel.getRepresentationFor(voRepresentation.index, realAdaptation);
-        const [baseUrl] = voRepresentation.adaptation.period.mpd.baseUrls;
+        const segmentDuration = voRepresentation.segmentDuration || (voRepresentation.segments && voRepresentation.segments.length > 0 ? voRepresentation.segments[0].duration : NaN);
+        const [baseUrl] = dashManifestModel.getBaseURLsFromElement(mpd.manifest);
 
         trackInfo.id = voRepresentation.id;
         trackInfo.quality = voRepresentation.index;
         trackInfo.bandwidth = dashManifestModel.getBandwidth(realRepresentation);
         trackInfo.DVRWindow = voRepresentation.segmentAvailabilityRange;
-        if (voRepresentation.segmentDuration) {
-            trackInfo.fragmentDuration = voRepresentation.segmentDuration - (baseUrl.availabilityTimeComplete && baseUrl.availabilityTimeOffset);
-        } else if (voRepresentation.segments && voRepresentation.segments.length > 0) {
-            trackInfo.fragmentDuration = voRepresentation.segments[0].duration;
-        } else {
-            trackInfo.fragmentDuration = NaN;
-        }
+        trackInfo.fragmentDuration = segmentDuration - baseUrl.availabilityTimeOffset;
         trackInfo.MSETimeOffset = voRepresentation.MSETimeOffset;
         trackInfo.useCalculatedLiveEdgeTime = voRepresentation.useCalculatedLiveEdgeTime;
         trackInfo.mediaInfo = convertAdaptationToMediaInfo(voRepresentation.adaptation);
@@ -179,12 +175,11 @@ function DashAdapter() {
     }
 
     function convertMpdToManifestInfo(mpd) {
-        const manifestInfo = new ManifestInfo();
-        const [baseUrl] = mpd.baseUrls;
+        let manifestInfo = new ManifestInfo();
 
         manifestInfo.DVRWindowSize = mpd.timeShiftBufferDepth;
         manifestInfo.loadedTime = mpd.manifest.loadedTime;
-        manifestInfo.availableFrom = new Date(mpd.availabilityStartTime - 1000 * baseUrl.availabilityTimeOffset);
+        manifestInfo.availableFrom = mpd.availabilityStartTime;
         manifestInfo.minBufferTime = mpd.manifest.minBufferTime;
         manifestInfo.maxFragmentDuration = mpd.maxSegmentDuration;
         manifestInfo.duration = dashManifestModel.getDuration(mpd.manifest);
@@ -517,7 +512,6 @@ function DashAdapter() {
 
     instance = {
         convertDataToTrack: convertRepresentationToTrackInfo,
-        getDataForTrack: getRepresentationForTrackInfo,
         getDataForMedia: getAdaptationForMediaInfo,
         getStreamsInfo: getStreamsInfo,
         getMediaInfoForType: getMediaInfoForType,

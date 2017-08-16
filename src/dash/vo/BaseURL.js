@@ -40,8 +40,8 @@ class BaseURL {
     constructor(url, serviceLocation, priority, weight) {
         this.url = url || '';
         this.serviceLocation = serviceLocation || url || '';
-        this.availabilityTimeOffset = 0;
         this.availabilityTimeComplete = true;
+        this.availabilityTimeOffset = 0;
 
         // DVB extensions
         this.dvb_priority = priority || DEFAULT_DVB_PRIORITY;
