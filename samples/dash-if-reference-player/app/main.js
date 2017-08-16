@@ -202,11 +202,11 @@ app.controller('DashController', function ($scope, sources, contributors) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
     }
 
-    $scope.player.setLiveDelay(0);
+    $scope.player.setLiveDelay(1);
     $scope.player.setLiveDelayFragmentCount(0);
-    //$scope.player.setStableBufferTime(100);
-    $scope.player.setFragmentLoaderRetryAttempts(20);
-    $scope.player.setFragmentLoaderRetryInterval(500);
+    //$scope.player.setStableBufferTime(12);
+    $scope.player.setFragmentLoaderRetryAttempts(100);
+    $scope.player.setFragmentLoaderRetryInterval(100);
 
     // get buffer default value
     $scope.defaultLiveDelay = $scope.player.getLiveDelay();

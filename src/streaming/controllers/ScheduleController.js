@@ -177,17 +177,17 @@ function ScheduleController(config) {
 
     function schedule() {
 
-        if (isStopped || isFragmentProcessingInProgress || !streamProcessor.getBufferController() || playbackController.isPaused() && !scheduleWhilePaused) {
+        if (isStopped || isFragmentProcessingInProgress || !streamProcessor || !streamProcessor.getBufferController() || playbackController.isPaused() && !scheduleWhilePaused) {
             return;
         }
 
         validateExecutedFragmentRequest();
 
+        const retryInterval = 100;
         const isReplacement = replaceRequestArray.length > 0;
-        if (switchTrack || isReplacement ||
-            hasTopQualityChanged(currentRepresentationInfo.mediaInfo.type, streamProcessor.getStreamInfo().id) ||
-            bufferLevelRule.execute(streamProcessor, type, streamController.isVideoTrackPresent())
-        ) {
+        const topQualityIndexChanged = hasTopQualityChanged(currentRepresentationInfo.mediaInfo.type, streamProcessor.getStreamInfo().id);
+        const bufferUnsatisfied = bufferLevelRule.execute(streamProcessor, type, streamController.isVideoTrackPresent());
+        if (switchTrack || isReplacement || topQualityIndexChanged || bufferUnsatisfied) {
 
             const getNextFragment = function () {
                 log('ScheduleController - getNextFragment');
@@ -215,7 +215,7 @@ function ScheduleController(config) {
                         } else { //Use case - Playing at the bleeding live edge and frag is not available yet. Cycle back around.
                             log('getNextFragment - Playing at the bleeding live edge and frag is not available yet');
                             isFragmentProcessingInProgress = false;
-                            startScheduleTimer(500);
+                            startScheduleTimer(retryInterval);
                         }
                     }
                 }
@@ -230,7 +230,7 @@ function ScheduleController(config) {
             }
 
         } else {
-            startScheduleTimer(500);
+            startScheduleTimer(retryInterval);
         }
     }
 
@@ -411,18 +411,15 @@ function ScheduleController(config) {
     }
 
     function onPlaybackTimeUpdated({time}) {
+        let delay = playbackController.getIsDynamic() ? new Date() / 1000 - time : NaN;
         const videoMetrics = metricsModel.getReadOnlyMetricsFor('video');
         const throughputHistory = abrController.getThroughputHistory();
-        let now = new Date() / 1000;
-        let delay = now - time;
-        let buffer = dashMetrics.getCurrentBufferLevel(videoMetrics);
-        let throughput = throughputHistory ? throughputHistory.getAverageThroughput('video') : 0;
-
+        const buffer = dashMetrics.getCurrentBufferLevel(videoMetrics);
+        const throughput = throughputHistory ? throughputHistory.getAverageThroughput('video') : 0;
         log('livestat', 'timeupdate',
             'delay:', delay.toFixed(3),
             'buffer:', buffer.toFixed(3),
             'throughput:', throughput.toFixed(3));
-
         completeQualityChange(true);
     }
 

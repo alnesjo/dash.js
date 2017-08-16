@@ -70,11 +70,6 @@ const FetchLoader = function (cfg) {
             let traces = [];
             request.requestStartDate = new Date();
 
-            let requestDelay = (request.requestStartDate - request.availabilityStartTime) / 1000;
-            log('livestat', 'loading',
-                'index:', request.index,
-                'request delay:', requestDelay.toFixed(3));
-
             const progress = (function () {
                 let then;
                 let remaining = new Uint8Array();
@@ -137,10 +132,10 @@ const FetchLoader = function (cfg) {
             })();
 
             /**
-             * Fetch resource as specified by <code>config.request</code>.
+             * Fetch resource specified by <code>config.request</code>.
              */
             return function () {
-                fetch(requestModifier.modifyRequestURL(request.url), (() => {
+                fetch(requestModifier.modifyRequestURL(request.url), (function () {
                     let headers = new Headers();
                     if (request.range) {
                         headers.append('Range', 'bytes=' + request.range);
@@ -150,7 +145,7 @@ const FetchLoader = function (cfg) {
                         headers: headers,
                         mode: mediaPlayerModel.getXHRWithCredentialsForType(request.type)
                     };
-                })()).then(({status, statusText, url, headers, body}) => {
+                })()).then(function ({status, statusText, url, headers, body}) {
                     request.firstByteDate = new Date();
                     progress();
                     let headersString = '';
@@ -163,9 +158,9 @@ const FetchLoader = function (cfg) {
                         headers: headersString,
                         reader: body.getReader()
                     };
-                }).then(({url, status, statusText, headers, reader}) => {
+                }).then(function ({url, status, statusText, headers, reader}) {
                     request.bytesLoaded = 0;
-                    const consume = ({value, done}) => {
+                    const consume = function ({value, done}) {
                         if (done) {
                             request.requestEndDate = new Date();
                             request.bytesTotal = request.bytesLoaded;
@@ -182,7 +177,7 @@ const FetchLoader = function (cfg) {
                         return reader.read().then(consume);
                     };
                     return reader.read().then(consume);
-                }).then(({url, status, statusText, headers}) => {
+                }).then(function ({url, status, statusText, headers}) {
                     let success = status >= 200 && status <= 299;
                     if (success) {
                         progress();
@@ -227,7 +222,11 @@ const FetchLoader = function (cfg) {
                             success ? traces : null
                         );
                     }
-                }).catch((error) => {
+                    let timePassed = (request.requestEndDate - request.requestStartDate) / 1000;
+                    log('livestat', 'loadend',
+                        'index:', request.index,
+                        'time passed:', timePassed.toFixed(3));
+                }).catch(function (error) {
                     log(error.message);
                 });
             };
@@ -252,12 +251,7 @@ const FetchLoader = function (cfg) {
      */
     const load = function (config) {
         if (config.request) {
-            internalLoad(
-                config,
-                mediaPlayerModel.getRetryAttemptsForType(
-                    config.request.type
-                )
-            );
+            internalLoad(config, mediaPlayerModel.getRetryAttemptsForType(config.request.type));
         }
     };
 
