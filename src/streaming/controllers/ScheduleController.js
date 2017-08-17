@@ -183,7 +183,7 @@ function ScheduleController(config) {
 
         validateExecutedFragmentRequest();
 
-        const retryInterval = 500;
+        const retryInterval = 100;
         const isReplacement = replaceRequestArray.length > 0;
         const topQualityIndexChanged = hasTopQualityChanged(currentRepresentationInfo.mediaInfo.type, streamProcessor.getStreamInfo().id);
         const bufferUnsatisfied = bufferLevelRule.execute(streamProcessor, type, streamController.isVideoTrackPresent());
