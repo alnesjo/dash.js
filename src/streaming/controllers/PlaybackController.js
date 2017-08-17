@@ -96,10 +96,11 @@ function PlaybackController() {
 
     function play() {
         if (videoModel && videoModel.getElement()) {
-            videoModel.play();
             videoModel.getElement().addEventListener('loadeddata', function () {
+                log('livestat', 'seeking to live start time:', liveStartTime);
                 seek(liveStartTime);
             }, {once: true, capture: true});
+            videoModel.play();
         } else {
             playOnceInitialized = true;
         }
