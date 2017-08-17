@@ -63,8 +63,7 @@ function TimelineConverter() {
     }
 
     function setClientTimeOffset(value) {
-        window.console.warn(setClientTimeOffset.name, 'ignoring', value);
-        //clientServerTimeShift = value;
+        clientServerTimeShift = value;
     }
 
     function getExpectedLiveEdge() {
