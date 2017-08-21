@@ -1,6 +1,6 @@
 import DashParser from '../../src/dash/parser/DashParser';
 import URLUtils from '../../src/streaming/utils/URLUtils';
-import XLinkController from '../../src/streaming/controllers/XLinkController';
+import XLinkController from '../../src/streaming/controllers/XlinkController';
 import Events from '../../src/core/events/Events';
 import EventBus from '../../src/core/EventBus';
 
