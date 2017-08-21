@@ -37,8 +37,8 @@ import FactoryMaker from '../../core/FactoryMaker.js';
 
 function ThroughputHistory(config) {
 
-    const MAX_MEASUREMENTS_TO_KEEP = 20;
-    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 3;
+    const MAX_MEASUREMENTS_TO_KEEP = 10;
+    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 2;
     const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD = 4;
     const AVERAGE_LATENCY_SAMPLE_AMOUNT = 4;
     const CACHE_LOAD_THRESHOLD_VIDEO = 50;

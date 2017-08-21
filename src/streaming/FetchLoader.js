@@ -73,6 +73,7 @@ const FetchLoader = function (cfg) {
             const progress = (function () {
                 let then;
                 let remaining = new Uint8Array();
+                let pushedOnce = false;
 
                 /**
                  * @param {TypedArray} a
@@ -115,18 +116,21 @@ const FetchLoader = function (cfg) {
                 return function (progress) {
                     let now = new Date();
                     then = then || now;
-                    if (progress) {
-                        traces.push({
-                            s: then,
-                            d: now - then,
-                            b: [progress.length]
-                        });
-                        let ready;
-                        [ready, remaining] = getReady(concatTypedArray(remaining, progress));
-                        if (0 < ready.length && config.progress) {
-                            config.progress(ready);
+                    let ready;
+                    [ready, remaining] = getReady(concatTypedArray(remaining, progress));
+                    if (0 < ready.length) {
+                        if (!pushedOnce) {
+                            traces.push({
+                                s: then,
+                                d: now - then,
+                                b: [ready.length]
+                            });
+                            pushedOnce = true;
                         }
                         then = (0 < remaining.length) ? now : undefined;
+                        if (config.progress) {
+                            config.progress(ready);
+                        }
                     }
                 };
             })();
@@ -147,7 +151,6 @@ const FetchLoader = function (cfg) {
                     };
                 })()).then(function ({status, statusText, url, headers, body}) {
                     request.firstByteDate = new Date();
-                    progress();
                     let headersString = '';
                     headers.forEach((key, value) => headersString += key + ': ' + value + '\r\n');
                     headersString = headersString.length > 0 ? headersString : null;
@@ -164,7 +167,6 @@ const FetchLoader = function (cfg) {
                         if (done) {
                             request.requestEndDate = new Date();
                             request.bytesTotal = request.bytesLoaded;
-                            progress();
                             return {
                                 url: url,
                                 status: status,
@@ -180,7 +182,6 @@ const FetchLoader = function (cfg) {
                 }).then(function ({url, status, statusText, headers}) {
                     let success = status >= 200 && status <= 299;
                     if (success) {
-                        progress();
                         if (config.success) {
                             config.success();
                         }
@@ -188,7 +189,6 @@ const FetchLoader = function (cfg) {
                             config.complete(undefined, statusText);
                         }
                     } else {
-                        progress();
                         if (remainingAttempts > 0) {
                             remainingAttempts--;
                             retryTimers.push(setTimeout(function () {
