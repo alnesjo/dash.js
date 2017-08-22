@@ -410,18 +410,18 @@ function ScheduleController(config) {
         }
 
         // setLiveEdgeSeekTarget();
-        // const time = playbackController.getTime();
+        // const playbackTime = playbackController.getTime();
         // const computedDelay = playbackController.computeLiveDelay(
-        //     currentRepresentationInfo.fragmentDuration,
-        //     currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2
-        // );
-        // const [lowerThreshold, upperThreshold] = [seekTarget - computedDelay, seekTarget];
-        // if (playbackController.getPlaybackRate() <= 1 && time < lowerThreshold) {
-        //     log('livestat', 'live edge maintenance', 'begin');
+        //      currentRepresentationInfo.fragmentDuration,
+        //      currentRepresentationInfo.mediaInfo.streamInfo.manifestInfo.DVRWindowSize / 2
+        //  );
+        // const [lowerThreshold, upperThreshold] = [seekTarget - 2 * computedDelay, seekTarget - computedDelay];
+        // if (!playbackController.isPaused() && playbackController.getPlaybackRate() === 1 && playbackTime < lowerThreshold) {
+        //     log('livestat', 'maintenance', 'begin');
         //     playbackController.setPlaybackRate(1.1);
-        // } else if (1 < playbackController.getPlaybackRate() &&  upperThreshold <= time) {
+        // } else if (1 < playbackController.getPlaybackRate() &&  upperThreshold <= playbackTime) {
         //     playbackController.setPlaybackRate(1);
-        //     log('livestat', 'live edge maintenance', 'end');
+        //     log('livestat', 'maintenance', 'end');
         // }
     }
 

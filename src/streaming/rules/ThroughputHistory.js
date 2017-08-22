@@ -29,7 +29,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-import Constants from '../constants/Constants';
+//import Constants from '../constants/Constants';
 import FactoryMaker from '../../core/FactoryMaker.js';
 
 // throughput generally stored in kbit/s
@@ -37,12 +37,12 @@ import FactoryMaker from '../../core/FactoryMaker.js';
 
 function ThroughputHistory(config) {
 
-    const MAX_MEASUREMENTS_TO_KEEP = 10;
-    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 2;
+    const MAX_MEASUREMENTS_TO_KEEP = 20;
+    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 3;
     const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD = 4;
     const AVERAGE_LATENCY_SAMPLE_AMOUNT = 4;
-    const CACHE_LOAD_THRESHOLD_VIDEO = 50;
-    const CACHE_LOAD_THRESHOLD_AUDIO = 5;
+    // const CACHE_LOAD_THRESHOLD_VIDEO = 50;
+    // const CACHE_LOAD_THRESHOLD_AUDIO = 5;
     const THROUGHPUT_DECREASE_SCALE = 1.3;
     const THROUGHPUT_INCREASE_SCALE = 1.3;
 
@@ -55,13 +55,13 @@ function ThroughputHistory(config) {
         reset();
     }
 
-    function isCachedResponse(mediaType, latencyMs, downloadTimeMs) {
-        if (mediaType === Constants.VIDEO) {
-            return downloadTimeMs < CACHE_LOAD_THRESHOLD_VIDEO;
-        } else if (mediaType === Constants.AUDIO) {
-            return downloadTimeMs < CACHE_LOAD_THRESHOLD_AUDIO;
-        }
-    }
+    // function isCachedResponse(mediaType, latencyMs, downloadTimeMs) {
+    //     if (mediaType === Constants.VIDEO) {
+    //         return downloadTimeMs < CACHE_LOAD_THRESHOLD_VIDEO;
+    //     } else if (mediaType === Constants.AUDIO) {
+    //         return downloadTimeMs < CACHE_LOAD_THRESHOLD_AUDIO;
+    //     }
+    // }
 
     function push(mediaType, httpRequest, useDeadTimeLatency) {
         if (!httpRequest.trace || !httpRequest.trace.length) {
@@ -76,20 +76,20 @@ function ThroughputHistory(config) {
         throughputDict[mediaType] = throughputDict[mediaType] || [];
         latencyDict[mediaType] = latencyDict[mediaType] || [];
 
-        if (isCachedResponse(mediaType, latencyTimeInMilliseconds, downloadTimeInMilliseconds)) {
-            if (throughputDict[mediaType].length > 0 && !throughputDict[mediaType].hasCachedEntries) {
-                // already have some entries which are not cached entries
-                // prevent cached fragment loads from skewing the average values
-                return;
-            } else { // have no entries || have cached entries
-                // no uncached entries yet, rely on cached entries because ABR rules need something to go by
-                throughputDict[mediaType].hasCachedEntries = true;
-            }
-        } else if (throughputDict[mediaType] && throughputDict[mediaType].hasCachedEntries) {
-            // if we are here then we have some entries already, but they are cached, and now we have a new uncached entry
-            throughputDict[mediaType] = [];
-            latencyDict[mediaType] = [];
-        }
+        // if (isCachedResponse(mediaType, latencyTimeInMilliseconds, downloadTimeInMilliseconds)) {
+        //     if (throughputDict[mediaType].length > 0 && !throughputDict[mediaType].hasCachedEntries) {
+        //         // already have some entries which are not cached entries
+        //         // prevent cached fragment loads from skewing the average values
+        //         return;
+        //     } else { // have no entries || have cached entries
+        //         // no uncached entries yet, rely on cached entries because ABR rules need something to go by
+        //         throughputDict[mediaType].hasCachedEntries = true;
+        //     }
+        // } else if (throughputDict[mediaType] && throughputDict[mediaType].hasCachedEntries) {
+        //     // if we are here then we have some entries already, but they are cached, and now we have a new uncached entry
+        //     throughputDict[mediaType] = [];
+        //     latencyDict[mediaType] = [];
+        // }
 
         throughputDict[mediaType].push({bit: 8 * downloadBytes, ms: throughputMeasureTime});
         if (throughputDict[mediaType].length > MAX_MEASUREMENTS_TO_KEEP) {

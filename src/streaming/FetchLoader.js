@@ -74,7 +74,7 @@ const FetchLoader = function (cfg) {
                 let then;
                 let remaining = new Uint8Array();
                 let firstChunkLoaded = false;
-                let recordAllChunks = false;
+                let recordAllChunks = true;
 
                 /**
                  * @param {TypedArray} a
@@ -125,12 +125,12 @@ const FetchLoader = function (cfg) {
                     if (0 < ready.length) {
                         log('livestat', 'chunk loading completed in:', ((now - then) / 1000).toFixed(3));
                         if (recordAllChunks || !firstChunkLoaded) {
+                            firstChunkLoaded = true;
                             traces.push({
                                 s: then,
                                 d: now - then,
                                 b: [ready.length]
                             });
-                            firstChunkLoaded = true;
                         }
                         then = (0 < remaining.length) ? now : undefined;
                         if (config.progress) {

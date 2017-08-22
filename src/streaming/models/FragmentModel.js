@@ -268,9 +268,20 @@ function FragmentModel(config) {
         });
     }
 
-    function onLoadingCompleted(e) {
-        if (e.sender !== fragmentLoader) return;
+    function onLoadingCompleted({request, response, error, sender}) {
+        if (sender !== fragmentLoader) return;
 
+        const idx = loadingRequests.indexOf(request);
+        if (-1 !== idx) {
+            loadingRequests.splice(idx, 1);
+            addSchedulingInfoMetrics(request, error ? FRAGMENT_MODEL_FAILED : FRAGMENT_MODEL_EXECUTED);
+            eventBus.trigger(Events.FRAGMENT_LOADING_COMPLETED, {
+                request: request,
+                response: response,
+                error: error,
+                sender: this
+            });
+        }
         // loadingRequests.splice(loadingRequests.indexOf(e.request), 1);
         //
         // if (e.response && !e.error) {
