@@ -62,6 +62,7 @@ const FetchLoader = function (cfg) {
     };
 
     let retryTimers = [];
+    let history = {'audio': [], 'video': []};
 
     const internalLoad = function (config, remainingAttempts) {
         let request = config.request;
@@ -74,7 +75,8 @@ const FetchLoader = function (cfg) {
                 let then;
                 let remaining = new Uint8Array();
                 let firstChunkLoaded = false;
-                let recordAllChunks = true;
+
+                let [recordAllChunks, maxHistory] = [false, 1];
 
                 /**
                  * @param {TypedArray} a
@@ -123,15 +125,25 @@ const FetchLoader = function (cfg) {
                     let ready;
                     [ready, remaining] = getReady(concatTypedArray(remaining, progress));
                     if (0 < ready.length) {
-                        log('livestat', 'chunk loading completed in:', ((now - then) / 1000).toFixed(3));
+                        let [bits, milliseconds] = [8 * ready.length, now - then];
                         if (recordAllChunks || !firstChunkLoaded) {
+                            history[request.mediaType].push({
+                                bits: bits,
+                                milliseconds: milliseconds || 1  // Avoid Infinity
+                            });
+                            if (maxHistory < history[request.mediaType].length) {
+                                history[request.mediaType].shift();
+                            }
                             firstChunkLoaded = true;
                             traces.push({
                                 s: then,
-                                d: now - then,
+                                d: milliseconds,
                                 b: [ready.length]
                             });
                         }
+                        let [totalBits, totalMilliseconds] = history[request.mediaType].reduce((acc, {bits, milliseconds}) => [acc[0] + bits, acc[1] + milliseconds], [0,0]);
+                        let throughput = totalBits / totalMilliseconds;
+                        log('livestat', 'chunk loading completed in:', (milliseconds / 1000).toFixed(3), request.mediaType, 'throughput:', throughput.toFixed(0));
                         then = (0 < remaining.length) ? now : undefined;
                         if (config.progress) {
                             config.progress(ready);
