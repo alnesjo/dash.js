@@ -2136,6 +2136,21 @@ function MediaPlayer() {
             throw MEDIA_PLAYER_NOT_INITIALIZED_ERROR;
         }
 
+        (function () {
+            log('livestat', 'start');
+            const now = new Date() / 1000;
+            const onPlaybackTimeUpdated = function () {
+                const then = new Date() / 1000;
+                log('livestat', 'first time update', 'delay:', (then - now).toFixed(3));
+                off(Events.PLAYBACK_TIME_UPDATED, onPlaybackTimeUpdated);
+            };
+            const onPlaybackSeeking = function () {
+                off(Events.PLAYBACK_SEEKED, onPlaybackSeeking);
+                on(Events.PLAYBACK_TIME_UPDATED, onPlaybackTimeUpdated);
+            };
+            on(Events.PLAYBACK_SEEKED, onPlaybackSeeking);
+        })();
+
         if (typeof urlOrManifest === 'string') {
             let uriQueryFragModel = URIQueryAndFragmentModel(context).getInstance();
             uriQueryFragModel.initialize();

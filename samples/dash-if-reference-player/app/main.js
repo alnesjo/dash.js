@@ -27,9 +27,10 @@ angular.module('DashContributorsService', ['ngResource']).factory('contributors'
 
 app.controller('DashController', function ($scope, sources, contributors) {
 
+    var log = window.console.log;
 
     $scope.selectedItem = {
-        url: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd"
+        url: 'http://localhost:8059/livesim/chunkdur_1/ato_7/testpic4_8s/Manifest.mpd'
     };
 
     sources.query(function (data) {
@@ -201,6 +202,12 @@ app.controller('DashController', function ($scope, sources, contributors) {
         $scope.player.attachTTMLRenderingDiv($("#video-caption")[0]);
     }
 
+    $scope.player.setLiveDelay(1);
+    $scope.player.setLiveDelayFragmentCount(0);
+    //$scope.player.setStableBufferTime(12);
+    $scope.player.setFragmentLoaderRetryAttempts(100);
+    $scope.player.setFragmentLoaderRetryInterval(100);
+
     // get buffer default value
     $scope.defaultLiveDelay = $scope.player.getLiveDelay();
     $scope.defaultStableBufferDelay = $scope.player.getStableBufferTime();
@@ -249,6 +256,7 @@ app.controller('DashController', function ($scope, sources, contributors) {
             $scope.doLoad();
         }
     }, $scope);
+
 
     ////////////////////////////////////////
     //
@@ -653,7 +661,7 @@ app.controller('DashController', function ($scope, sources, contributors) {
             };
 
             var downloadTimes = requestWindow.map(function (req) {
-                return Math.abs(req._tfinish.getTime() - req.tresponse.getTime()) / 1000;
+                return req.trace.reduce((a, b) => a + b.d, 0) / 1000;
             });
 
             download[type] = {

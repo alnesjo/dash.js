@@ -81,14 +81,17 @@ function DashAdapter() {
 
     function convertRepresentationToRepresentationInfo(voRepresentation) {
         let representationInfo = new RepresentationInfo();
-        const realAdaptation = voRepresentation.adaptation.period.mpd.manifest.Period_asArray[voRepresentation.adaptation.period.index].AdaptationSet_asArray[voRepresentation.adaptation.index];
+        const mpd = voRepresentation.adaptation.period.mpd;
+        const realAdaptation = mpd.manifest.Period_asArray[voRepresentation.adaptation.period.index].AdaptationSet_asArray[voRepresentation.adaptation.index];
         const realRepresentation = dashManifestModel.getRepresentationFor(voRepresentation.index, realAdaptation);
+        const segmentDuration = voRepresentation.segmentDuration || (voRepresentation.segments && voRepresentation.segments.length > 0 ? voRepresentation.segments[0].duration : NaN);
+        const [baseUrl] = dashManifestModel.getBaseURLsFromElement(mpd.manifest);
 
         representationInfo.id = voRepresentation.id;
         representationInfo.quality = voRepresentation.index;
         representationInfo.bandwidth = dashManifestModel.getBandwidth(realRepresentation);
         representationInfo.DVRWindow = voRepresentation.segmentAvailabilityRange;
-        representationInfo.fragmentDuration = voRepresentation.segmentDuration || (voRepresentation.segments && voRepresentation.segments.length > 0 ? voRepresentation.segments[0].duration : NaN);
+        representationInfo.fragmentDuration = segmentDuration - baseUrl.availabilityTimeOffset;
         representationInfo.MSETimeOffset = voRepresentation.MSETimeOffset;
         representationInfo.useCalculatedLiveEdgeTime = voRepresentation.useCalculatedLiveEdgeTime;
         representationInfo.mediaInfo = convertAdaptationToMediaInfo(voRepresentation.adaptation);

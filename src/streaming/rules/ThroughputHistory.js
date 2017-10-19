@@ -29,7 +29,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-import Constants from '../constants/Constants';
+//import Constants from '../constants/Constants';
 import FactoryMaker from '../../core/FactoryMaker.js';
 
 // throughput generally stored in kbit/s
@@ -71,13 +71,13 @@ function ThroughputHistory(config) {
         reset();
     }
 
-    function isCachedResponse(mediaType, latencyMs, downloadTimeMs) {
-        if (mediaType === Constants.VIDEO) {
-            return downloadTimeMs < CACHE_LOAD_THRESHOLD_VIDEO;
-        } else if (mediaType === Constants.AUDIO) {
-            return downloadTimeMs < CACHE_LOAD_THRESHOLD_AUDIO;
-        }
-    }
+    // function isCachedResponse(mediaType, latencyMs, downloadTimeMs) {
+    //     if (mediaType === Constants.VIDEO) {
+    //         return downloadTimeMs < CACHE_LOAD_THRESHOLD_VIDEO;
+    //     } else if (mediaType === Constants.AUDIO) {
+    //         return downloadTimeMs < CACHE_LOAD_THRESHOLD_AUDIO;
+    //     }
+    // }
 
     function push(mediaType, httpRequest, useDeadTimeLatency) {
         if (!httpRequest.trace || !httpRequest.trace.length) {
@@ -85,28 +85,29 @@ function ThroughputHistory(config) {
         }
 
         const latencyTimeInMilliseconds = (httpRequest.tresponse.getTime() - httpRequest.trequest.getTime()) || 1;
-        const downloadTimeInMilliseconds = (httpRequest._tfinish.getTime() - httpRequest.tresponse.getTime()) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
+        const downloadTimeInMilliseconds = httpRequest.trace.reduce((a, b) => a + b.d, 0) || 1; //Make sure never 0 we divide by this value. Avoid infinity!
         const downloadBytes = httpRequest.trace.reduce((a, b) => a + b.b[0], 0);
         const throughputMeasureTime = useDeadTimeLatency ? downloadTimeInMilliseconds : latencyTimeInMilliseconds + downloadTimeInMilliseconds;
-        let throughput = Math.round((8 * downloadBytes) / throughputMeasureTime); // bits/ms = kbits/s
 
         checkSettingsForMediaType(mediaType);
 
-        if (isCachedResponse(mediaType, latencyTimeInMilliseconds, downloadTimeInMilliseconds)) {
-            if (throughputDict[mediaType].length > 0 && !throughputDict[mediaType].hasCachedEntries) {
-                // already have some entries which are not cached entries
-                // prevent cached fragment loads from skewing the average values
-                return;
-            } else { // have no entries || have cached entries
-                // no uncached entries yet, rely on cached entries because ABR rules need something to go by
-                throughputDict[mediaType].hasCachedEntries = true;
-            }
-        } else if (throughputDict[mediaType] && throughputDict[mediaType].hasCachedEntries) {
-            // if we are here then we have some entries already, but they are cached, and now we have a new uncached entry
-            clearSettingsForMediaType(mediaType);
-        }
+        // if (isCachedResponse(mediaType, latencyTimeInMilliseconds, downloadTimeInMilliseconds)) {
+        //     if (throughputDict[mediaType].length > 0 && !throughputDict[mediaType].hasCachedEntries) {
+        //         // already have some entries which are not cached entries
+        //         // prevent cached fragment loads from skewing the average values
+        //         return;
+        //     } else { // have no entries || have cached entries
+        //         // no uncached entries yet, rely on cached entries because ABR rules need something to go by
+        //         throughputDict[mediaType].hasCachedEntries = true;
+        //     }
+        // } else if (throughputDict[mediaType] && throughputDict[mediaType].hasCachedEntries) {
+        //     // if we are here then we have some entries already, but they are cached, and now we have a new uncached entry
+        //     throughputDict[mediaType] = [];
+        //     latencyDict[mediaType] = [];
+        // }
 
-        throughputDict[mediaType].push(throughput);
+        throughputDict[mediaType].push({bit: 8 * downloadBytes, ms: throughputMeasureTime});
+
         if (throughputDict[mediaType].length > MAX_MEASUREMENTS_TO_KEEP) {
             throughputDict[mediaType].shift();
         }
@@ -116,6 +117,7 @@ function ThroughputHistory(config) {
             latencyDict[mediaType].shift();
         }
 
+        let throughput = downloadBytes / throughputMeasureTime;
         updateEwmaEstimate(ewmaThroughputDict[mediaType], throughput, 0.001 * downloadTimeInMilliseconds, ewmaHalfLife.throughputHalfLife);
         updateEwmaEstimate(ewmaLatencyDict[mediaType], latencyTimeInMilliseconds, 1, ewmaHalfLife.latencyHalfLife);
     }
@@ -135,7 +137,7 @@ function ThroughputHistory(config) {
         ewmaObj.totalWeight += weight;
     }
 
-    function getSampleSize(isThroughput, mediaType, isLive) {
+    function getSamples(isThroughput, mediaType, isLive) {
         let arr;
         let sampleSize;
 
@@ -164,27 +166,29 @@ function ThroughputHistory(config) {
             }
         }
 
-        return sampleSize;
+        return (sampleSize === 0 || !arr || arr.length === 0) ? [] : arr.slice(-sampleSize);
     }
 
-    function getAverage(isThroughput, mediaType, isDynamic) {
+    function getAverageThroughput(mediaType, isDynamic) {
         // only two moving average methods defined at the moment
         return mediaPlayerModel.getMovingAverageMethod() !== Constants.MOVING_AVERAGE_SLIDING_WINDOW ?
-            getAverageEwma(isThroughput, mediaType) : getAverageSlidingWindow(isThroughput, mediaType, isDynamic);
+            getAverageEwma(true, mediaType) : slidingWindowThroughput(mediaType, isDynamic);
     }
 
-    function getAverageSlidingWindow(isThroughput, mediaType, isDynamic) {
-        let sampleSize = getSampleSize(isThroughput, mediaType, isDynamic);
-        let dict = isThroughput ? throughputDict : latencyDict;
-        let arr = dict[mediaType];
+    function getAverageLatency(mediaType, isDynamic) {
+        return mediaPlayerModel.getMovingAverageMethod() !== Constants.MOVING_AVERAGE_SLIDING_WINDOW ?
+            getAverageEwma(false, mediaType) : slidingWindowLatency(mediaType, isDynamic);
+    }
 
-        if (sampleSize === 0 || !arr || arr.length === 0) {
+    function slidingWindowThroughput(mediaType, isDynamic) {
+        let samples = getSamples(true, mediaType, isDynamic);
+
+        if (samples) {
+            let [bits, milliseconds] = samples.reduce(([a, b], {bit, ms}) => [a + bit, b + ms], [0,0]);
+            return Math.round(bits / milliseconds); // bit/ms = kbit/s
+        } else {
             return NaN;
         }
-
-        arr = arr.slice(-sampleSize); // still works if sampleSize too large
-        // arr.length >= 1
-        return arr.reduce((total, elem) => total + elem) / arr.length;
     }
 
     function getAverageEwma(isThroughput, mediaType) {
@@ -201,20 +205,17 @@ function ThroughputHistory(config) {
         return isThroughput ? Math.min(fastEstimate, slowEstimate) : Math.max(fastEstimate, slowEstimate);
     }
 
-    function getAverageThroughput(mediaType, isDynamic) {
-        return getAverage(true, mediaType, isDynamic);
-    }
-
     function getSafeAverageThroughput(mediaType, isDynamic) {
-        let average = getAverageThroughput(mediaType, isDynamic);
-        if (!isNaN(average)) {
-            average *= mediaPlayerModel.getBandwidthSafetyFactor();
-        }
-        return average;
+        return getAverageThroughput(mediaType, isDynamic) * mediaPlayerModel.getBandwidthSafetyFactor();
     }
 
-    function getAverageLatency(mediaType) {
-        return getAverage(false, mediaType);
+    function slidingWindowLatency(mediaType) {
+        let samples = getSamples(false, mediaType);
+        if (samples) {
+            return samples.reduce((total, elem) => total + elem, 0) / samples.length;
+        } else {
+            return NaN;
+        }
     }
 
     function checkSettingsForMediaType(mediaType) {

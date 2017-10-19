@@ -95,6 +95,10 @@ function PlaybackController() {
 
     function play() {
         if (videoModel && videoModel.getElement()) {
+            videoModel.getElement().addEventListener('loadeddata', function () {
+                log('livestat', 'seeking to live start time:', liveStartTime);
+                seek(liveStartTime);
+            }, {once: true, capture: true});
             videoModel.play();
         } else {
             playOnceInitialized = true;
@@ -129,6 +133,12 @@ function PlaybackController() {
 
     function getPlaybackRate() {
         return videoModel ? videoModel.getPlaybackRate() : null;
+    }
+
+    function setPlaybackRate(rate) {
+        if (videoModel) {
+            videoModel.setPlaybackRate(rate);
+        }
     }
 
     function getPlayedRanges() {
@@ -544,6 +554,7 @@ function PlaybackController() {
         getTimeToStreamEnd: getTimeToStreamEnd,
         getTime: getTime,
         getPlaybackRate: getPlaybackRate,
+        setPlaybackRate: setPlaybackRate,
         getPlayedRanges: getPlayedRanges,
         getEnded: getEnded,
         getIsDynamic: getIsDynamic,

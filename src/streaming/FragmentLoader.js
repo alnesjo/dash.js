@@ -28,7 +28,7 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-import XHRLoader from './XHRLoader';
+import FetchLoader from './FetchLoader';
 import HeadRequest from './vo/HeadRequest';
 import DashJSError from './vo/DashJSError';
 import EventBus from './../core/EventBus';
@@ -45,10 +45,10 @@ function FragmentLoader(config) {
     const eventBus = EventBus(context).getInstance();
 
     let instance,
-        xhrLoader;
+        loader;
 
     function setup() {
-        xhrLoader = XHRLoader(context).create({
+        loader = FetchLoader(context).create({
             errHandler: config.errHandler,
             metricsModel: config.metricsModel,
             mediaPlayerModel: config.mediaPlayerModel,
@@ -69,7 +69,7 @@ function FragmentLoader(config) {
         if (request) {
             let headRequest = new HeadRequest(request.url);
 
-            xhrLoader.load({
+            loader.load({
                 request: headRequest,
                 success: function () {
                     report(true);
@@ -84,9 +84,10 @@ function FragmentLoader(config) {
     }
 
     function load(request) {
-        const report = function (data, error) {
-            eventBus.trigger(Events.LOADING_COMPLETED, {
+        const report = function (event, data, error) {
+            eventBus.trigger(event, {
                 request: request,
+                mediaType: request.mediaType,
                 response: data || null,
                 error: error || null,
                 sender: instance
@@ -94,53 +95,40 @@ function FragmentLoader(config) {
         };
 
         if (request) {
-            xhrLoader.load({
+            loader.load({
                 request: request,
-                progress: function () {
-                    eventBus.trigger(Events.LOADING_PROGRESS, {
-                        request: request
-                    });
+                progress: function (data) {
+                    report(Events.LOADING_PROGRESS, data);
                 },
                 success: function (data) {
-                    report(data);
+                    report(Events.LOADING_COMPLETED, data);
                 },
                 error: function (xhr, statusText, errorText) {
-                    report(
-                        undefined,
-                        new DashJSError(
-                            FRAGMENT_LOADER_ERROR_LOADING_FAILURE,
-                            errorText,
-                            statusText
-                        )
-                    );
+                    report(Events.LOADING_COMPLETED, undefined,
+                        new DashJSError(FRAGMENT_LOADER_ERROR_LOADING_FAILURE, errorText, statusText));
                 },
                 abort: function (request, status) {
                     if (request && status === 0) {
-                        eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: instance});
+                        report(Events.LOADING_ABANDONED);
                     }
                 }
             });
         } else {
-            report(
-                undefined,
-                new DashJSError(
-                    FRAGMENT_LOADER_ERROR_NULL_REQUEST,
-                    FRAGMENT_LOADER_MESSAGE_NULL_REQUEST
-                )
-            );
+            report(Events.LOADING_COMPLETED, undefined,
+                new DashJSError(FRAGMENT_LOADER_ERROR_NULL_REQUEST, FRAGMENT_LOADER_MESSAGE_NULL_REQUEST));
         }
     }
 
     function abort() {
-        if (xhrLoader) {
-            xhrLoader.abort();
+        if (loader) {
+            loader.abort();
         }
     }
 
     function reset() {
-        if (xhrLoader) {
-            xhrLoader.abort();
-            xhrLoader = null;
+        if (loader) {
+            loader.abort();
+            loader = null;
         }
     }
 
