@@ -29,7 +29,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-//import Constants from '../constants/Constants';
+import Constants from '../constants/Constants';
 import FactoryMaker from '../../core/FactoryMaker.js';
 
 // throughput generally stored in kbit/s
@@ -51,8 +51,8 @@ function ThroughputHistory(config) {
     const EWMA_LATENCY_SLOW_HALF_LIFE_COUNT = 2;
     const EWMA_LATENCY_FAST_HALF_LIFE_COUNT = 1;
 
-    const CACHE_LOAD_THRESHOLD_VIDEO = 50;
-    const CACHE_LOAD_THRESHOLD_AUDIO = 5;
+    //const CACHE_LOAD_THRESHOLD_VIDEO = 50;
+    //const CACHE_LOAD_THRESHOLD_AUDIO = 5;
 
     const mediaPlayerModel = config.mediaPlayerModel;
 
@@ -225,13 +225,13 @@ function ThroughputHistory(config) {
         ewmaLatencyDict[mediaType] = ewmaLatencyDict[mediaType] || {fastEstimate: 0, slowEstimate: 0, totalWeight: 0};
     }
 
-    function clearSettingsForMediaType(mediaType) {
-        delete throughputDict[mediaType];
-        delete latencyDict[mediaType];
-        delete ewmaThroughputDict[mediaType];
-        delete ewmaLatencyDict[mediaType];
-        checkSettingsForMediaType(mediaType);
-    }
+    // function clearSettingsForMediaType(mediaType) {
+    //     delete throughputDict[mediaType];
+    //     delete latencyDict[mediaType];
+    //     delete ewmaThroughputDict[mediaType];
+    //     delete ewmaLatencyDict[mediaType];
+    //     checkSettingsForMediaType(mediaType);
+    // }
 
     function reset() {
         throughputDict = {};

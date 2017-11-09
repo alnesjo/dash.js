@@ -422,14 +422,8 @@ function ScheduleController(config) {
 
     function onPlaybackTimeUpdated({time}) {
         let delay = playbackController.getIsDynamic() ? new Date() / 1000 - time : NaN;
-        const videoMetrics = metricsModel.getReadOnlyMetricsFor('video');
-        const throughputHistory = abrController.getThroughputHistory();
-        const buffer = dashMetrics.getCurrentBufferLevel(videoMetrics);
-        const throughput = throughputHistory ? throughputHistory.getAverageThroughput('video') : 0;
         log('livestat', 'timeupdate',
-            'delay:', delay.toFixed(3),
-            'buffer:', buffer.toFixed(3),
-            'throughput:', throughput.toFixed(3));
+            'delay:', delay.toFixed(3));
         completeQualityChange(true);
     }
 

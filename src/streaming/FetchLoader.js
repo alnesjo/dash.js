@@ -33,23 +33,67 @@ import {HTTPRequest} from './vo/metrics/HTTPRequest';
 import FactoryMaker from '../core/FactoryMaker';
 import ErrorHandler from './utils/ErrorHandler.js';
 import Debug from '../core/Debug';
-import ISOBoxer from 'codem-isoboxer';
+import {concat} from './utils/TypedArray';
+import {parse} from './utils/CMAFChunk';
 /* global Headers: false */
+
+const ChunkProcessor = function ({config, traces, throughputHistory}) {
+    const log = Debug().getInstance().log;
+    const request = config.request;
+    const mediaType = request.mediaType;
+
+    let now = config.requestStartDate;
+    let then;
+
+    let firstChunkLoaded = false;
+    let recordAllChunks = false;
+    let maxHistory = 1;
+    let remaining = new Uint8Array();
+
+    const process = function (completed) {
+        // Throughput estimation should be done by ThrouhputHistory which needs modification to account for chunks.
+        let [bits, milliseconds] = [8 * completed.length, now - then];
+        if (recordAllChunks || !firstChunkLoaded) {
+            firstChunkLoaded = true;
+            throughputHistory[mediaType].push({
+                bits: bits,
+                milliseconds: milliseconds || 1  // Avoid Infinity
+            });
+            if (maxHistory < throughputHistory[mediaType].length) {
+                throughputHistory[mediaType].shift();
+            }
+        }
+        let [totalBits, totalMilliseconds] = throughputHistory[mediaType].reduce((acc, {bits, milliseconds}) => [acc[0] + bits, acc[1] + milliseconds], [0,0]);
+        let throughput = totalBits / totalMilliseconds;
+        log('livestat', 'chunk loading completed in:', (milliseconds / 1000).toFixed(3), mediaType, 'throughput:', throughput.toFixed(0));
+
+        traces.push({
+            s: then,
+            d: milliseconds,
+            b: [completed.length]
+        });
+        then = (0 < remaining.length) ? now : undefined;
+        if (config.progress) {
+            // Need outgoing data to be of type ArrayBuffer for compatibility, unfortunately have to reallocate the ArrayBuffer
+            config.progress(completed.slice().buffer);
+        }
+    };
+
+    return {
+        process: process
+    };
+};
+
 
 /**
  * @module FetchLoader
  * @description Manages download of resources via HTTP.
- * @param {Object} cfg - dependencies from parent
+ * @param {Object} object
  */
-const FetchLoader = function (cfg) {
+const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, requestModifier}) {
     const context = this.context;
 
     const log = Debug(context).getInstance().log;
-
-    const errHandler = cfg.errHandler;
-    const metricsModel = cfg.metricsModel;
-    const mediaPlayerModel = cfg.mediaPlayerModel;
-    const requestModifier = cfg.requestModifier;
 
     const downloadErrorToRequestTypeMap = {
         [HTTPRequest.MPD_TYPE]:                         ErrorHandler.DOWNLOAD_ERROR_ID_MANIFEST,
@@ -62,196 +106,118 @@ const FetchLoader = function (cfg) {
     };
 
     let retryTimers = [];
-    let history = {'audio': [], 'video': []};
+    let throughputHistory = {'audio': [], 'video': []};
 
     const internalLoad = function (config, remainingAttempts) {
         let request = config.request;
+        let traces = [];
+        let now = new Date();
+        request.requestStartDate = now;
 
-        const fetcher = (function () {
-            let traces = [];
-            request.requestStartDate = new Date();
+        const {process} = ChunkProcessor({config: config, traces: traces, throughputHistory: throughputHistory});
+        const url = requestModifier.modifyRequestURL(request.url);
+        const method = request.checkForExistenceOnly ? 'HEAD' : 'GET';
+        const headers = new Headers(request.range ? { 'Range': 'bytes=' + request.range } : undefined);
+        const mode = mediaPlayerModel.getXHRWithCredentialsForType(request.type);
 
-            const progress = (function () {
-                let then;
+        const fetcher = function () {
+            fetch(url, {
+                method: method,
+                headers: headers,
+                mode: mode
+            }).then(function ({status, statusText, url, headers, body}) {
+                request.firstByteDate = new Date();
+                let headersString = '';
+                headers.forEach((key, value) => headersString += key + ': ' + value + '\r\n');
+                headersString = headersString.length > 0 ? headersString : null;
+                return {
+                    url: url,
+                    status: status,
+                    statusText: statusText,
+                    headers: headersString,
+                    reader: body.getReader()
+                };
+            }).then(function ({url, status, statusText, headers, reader}) {
+                request.bytesLoaded = 0;
                 let remaining = new Uint8Array();
-                let firstChunkLoaded = false;
-
-                let [recordAllChunks, maxHistory] = [false, 1];
-
-                /**
-                 * @param {TypedArray} a
-                 * @param {TypedArray} b
-                 * @returns {TypedArray} New array consisting of the elements of <code>a</code>, followed by the
-                 * elements of <code>b</code>.
-                 */
-                const concatTypedArray = function (a, b) {
-                    if (a.constructor !== b.constructor) {
-                        throw new TypeError('Type mismatch. Expected: ' + a.constructor.name +
-                            ', but got: ' + b.constructor.name + '.');
+                const eat = function ({value, done}) {
+                    if (done) {
+                        if (0 < remaining.length) process(remaining);
+                        request.requestEndDate = new Date();
+                        request.bytesTotal = request.bytesLoaded;
+                        return {
+                            url: url,
+                            status: status,
+                            statusText: statusText,
+                            headers: headers
+                        };
                     }
-                    let c = new a.constructor(a.length + b.length);
-                    c.set(a);
-                    c.set(b, a.length);
-                    return c;
+                    request.bytesLoaded += value.length;
+                    const progress = concat(remaining, value);
+                    let completed = [];
+                    if (HTTPRequest.MEDIA_SEGMENT_TYPE === request.type) {
+                        [remaining, ...completed] = parse(progress).reverse();
+                    } else {
+                        remaining = progress;
+                    }
+                    completed.reverse().forEach(process);
+                    return reader.read().then(eat);
                 };
-
-                /**
-                 * @param {TypedArray} data
-                 * @returns {TypedArray []} Tuple containing completed CMAF chunks and the remaining data.
-                 */
-                const getReady = function (data) {
-                    let boxes = ISOBoxer.parseBuffer(data.buffer).boxes;
-                    let end = 0;
-                    for (let i = 0; i < boxes.length; i++) {
-                        if (boxes[i]._incomplete) {
-                            break;
-                        } else if (['moov', 'mdat'].includes(boxes[i].type)) {
-                            end = boxes[i]._offset + boxes[i].size;
-                        }
+                return reader.read().then(eat);
+            }).then(function ({url, status, statusText, headers}) {
+                let success = status >= 200 && status <= 299;
+                if (success) {
+                    if (config.success) {
+                        config.success();
                     }
-                    return [data.subarray(0, end), data.subarray(end)];
-                };
-
-                /**
-                 * Loading progress parsing and reporting.
-                 * @param {Uint8Array} progress
-                 */
-                return function (progress) {
-                    let now = new Date();
-                    if (!then) {
-                        log('livestat', 'chunk loading started');
+                    if (config.complete) {
+                        config.complete(undefined, statusText);
                     }
-                    then = then || now;
-                    let ready;
-                    [ready, remaining] = getReady(concatTypedArray(remaining, progress));
-                    if (0 < ready.length) {
-                        let [bits, milliseconds] = [8 * ready.length, now - then];
-                        if (recordAllChunks || !firstChunkLoaded) {
-                            history[request.mediaType].push({
-                                bits: bits,
-                                milliseconds: milliseconds || 1  // Avoid Infinity
-                            });
-                            if (maxHistory < history[request.mediaType].length) {
-                                history[request.mediaType].shift();
-                            }
-                            firstChunkLoaded = true;
-                            traces.push({
-                                s: then,
-                                d: milliseconds,
-                                b: [ready.length]
-                            });
-                        }
-                        let [totalBits, totalMilliseconds] = history[request.mediaType].reduce((acc, {bits, milliseconds}) => [acc[0] + bits, acc[1] + milliseconds], [0,0]);
-                        let throughput = totalBits / totalMilliseconds;
-                        log('livestat', 'chunk loading completed in:', (milliseconds / 1000).toFixed(3), request.mediaType, 'throughput:', throughput.toFixed(0));
-                        then = (0 < remaining.length) ? now : undefined;
-                        if (config.progress) {
-                            config.progress(ready);
-                        }
-                    }
-                };
-            })();
-
-            /**
-             * Fetch resource specified by <code>config.request</code>.
-             */
-            return function () {
-                fetch(requestModifier.modifyRequestURL(request.url), (function () {
-                    let headers = new Headers();
-                    if (request.range) {
-                        headers.append('Range', 'bytes=' + request.range);
-                    }
-                    return {
-                        method: request.checkForExistenceOnly ? 'HEAD' : 'GET',
-                        headers: headers,
-                        mode: mediaPlayerModel.getXHRWithCredentialsForType(request.type)
-                    };
-                })()).then(function ({status, statusText, url, headers, body}) {
-                    request.firstByteDate = new Date();
-                    let headersString = '';
-                    headers.forEach((key, value) => headersString += key + ': ' + value + '\r\n');
-                    headersString = headersString.length > 0 ? headersString : null;
-                    return {
-                        url: url,
-                        status: status,
-                        statusText: statusText,
-                        headers: headersString,
-                        reader: body.getReader()
-                    };
-                }).then(function ({url, status, statusText, headers, reader}) {
-                    request.bytesLoaded = 0;
-                    const consume = function ({value, done}) {
-                        if (done) {
-                            request.requestEndDate = new Date();
-                            request.bytesTotal = request.bytesLoaded;
-                            return {
-                                url: url,
-                                status: status,
-                                statusText: statusText,
-                                headers: headers
-                            };
-                        }
-                        request.bytesLoaded += value.length;
-                        progress(value);
-                        return reader.read().then(consume);
-                    };
-                    return reader.read().then(consume);
-                }).then(function ({url, status, statusText, headers}) {
-                    let success = status >= 200 && status <= 299;
-                    if (success) {
-                        if (config.success) {
-                            config.success();
+                } else {
+                    if (remainingAttempts > 0) {
+                        remainingAttempts--;
+                        retryTimers.push(setTimeout(function () {
+                            internalLoad(config, remainingAttempts);
+                        }, mediaPlayerModel.getRetryIntervalForType(request.type)));
+                    } else {
+                        errHandler.downloadError(downloadErrorToRequestTypeMap[request.type], request.url, request);
+                        if (config.error) {
+                            config.error(undefined, statusText, 'no attempts remaining');
                         }
                         if (config.complete) {
                             config.complete(undefined, statusText);
                         }
-                    } else {
-                        if (remainingAttempts > 0) {
-                            remainingAttempts--;
-                            retryTimers.push(setTimeout(function () {
-                                internalLoad(config, remainingAttempts);
-                            }, mediaPlayerModel.getRetryIntervalForType(request.type)));
-                        } else {
-                            errHandler.downloadError(downloadErrorToRequestTypeMap[request.type], request.url, request);
-                            if (config.error) {
-                                config.error(undefined, statusText, 'no attempts remaining');
-                            }
-                            if (config.complete) {
-                                config.complete(undefined, statusText);
-                            }
-                        }
                     }
-                    if (!request.checkForExistenceOnly) {
-                        metricsModel.addHttpRequest(
-                            request.mediaType,
-                            null,
-                            request.type,
-                            request.url,
-                            url || null,
-                            request.serviceLocation || null,
-                            request.range || null,
-                            request.requestStartDate,
-                            request.firstByteDate,
-                            request.requestEndDate,
-                            status,
-                            request.duration,
-                            headers,
-                            success ? traces : null
-                        );
-                    }
-                    let timePassed = (request.requestEndDate - request.requestStartDate) / 1000;
-                    log('livestat', 'loadend',
-                        'index:', request.index,
-                        'time passed:', timePassed.toFixed(3));
-                }).catch(function (error) {
-                    log(error.message);
-                });
-            };
-        })();
+                }
+                if (!request.checkForExistenceOnly) {
+                    metricsModel.addHttpRequest(
+                        request.mediaType,
+                        null,
+                        request.type,
+                        request.url,
+                        url || null,
+                        request.serviceLocation || null,
+                        request.range || null,
+                        request.requestStartDate,
+                        request.firstByteDate,
+                        request.requestEndDate,
+                        status,
+                        request.duration,
+                        headers,
+                        success ? traces : null
+                    );
+                }
+                let timePassed = (request.requestEndDate - request.requestStartDate) / 1000;
+                log('livestat', 'loadend',
+                    'index:', request.index,
+                    'time passed:', timePassed.toFixed(3));
+            }).catch(function (error) {
+                log(error.message);
+            });
+        };
 
 
         // Adds the ability to delay single fragment loading time to control buffer.
-        let now = new Date().getTime();
         if (isNaN(request.delayLoadingTime) || now >= request.delayLoadingTime) {
             fetcher();
         } else {
