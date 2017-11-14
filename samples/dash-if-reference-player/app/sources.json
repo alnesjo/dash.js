@@ -38,6 +38,10 @@
       "name": "LIVE (Dynamic MPD)",
       "submenu": [
         {
+          "url": "http://vm2.dashif.org/livesim/chunkdur_1/ato_7/testpic4_8s/Manifest.mpd",
+          "name": "Chunked SegmentTemplate without manifest updates (livesim)"
+        },
+        {
           "url": "https://vm2.dashif.org/livesim/testpic_2s/Manifest.mpd",
           "name": "SegmentTemplate without manifest updates (livesim)"
         },
