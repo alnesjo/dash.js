@@ -37,53 +37,6 @@ import {concat} from './utils/TypedArray';
 import {parse} from './utils/CMAFChunk';
 /* global Headers: false */
 
-const ChunkProcessor = function ({config, traces, throughputHistory}) {
-    const log = Debug().getInstance().log;
-    const request = config.request;
-    const mediaType = request.mediaType;
-
-    let now = config.requestStartDate;
-    let then;
-
-    let firstChunkLoaded = false;
-    let recordAllChunks = false;
-    let maxHistory = 1;
-    let remaining = new Uint8Array();
-
-    const process = function (completed) {
-        // Throughput estimation should be done by ThrouhputHistory which needs modification to account for chunks.
-        let [bits, milliseconds] = [8 * completed.length, now - then];
-        if (recordAllChunks || !firstChunkLoaded) {
-            firstChunkLoaded = true;
-            throughputHistory[mediaType].push({
-                bits: bits,
-                milliseconds: milliseconds || 1  // Avoid Infinity
-            });
-            if (maxHistory < throughputHistory[mediaType].length) {
-                throughputHistory[mediaType].shift();
-            }
-        }
-        let [totalBits, totalMilliseconds] = throughputHistory[mediaType].reduce((acc, {bits, milliseconds}) => [acc[0] + bits, acc[1] + milliseconds], [0,0]);
-        let throughput = totalBits / totalMilliseconds;
-        log('livestat', 'chunk loading completed in:', (milliseconds / 1000).toFixed(3), mediaType, 'throughput:', throughput.toFixed(0));
-
-        traces.push({
-            s: then,
-            d: milliseconds,
-            b: [completed.length]
-        });
-        then = (0 < remaining.length) ? now : undefined;
-        if (config.progress) {
-            // Need outgoing data to be of type ArrayBuffer for compatibility, unfortunately have to reallocate the ArrayBuffer
-            config.progress(completed.slice().buffer);
-        }
-    };
-
-    return {
-        process: process
-    };
-};
-
 
 /**
  * @module FetchLoader
@@ -105,20 +58,36 @@ const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, reque
         [HTTPRequest.OTHER_TYPE]:                       ErrorHandler.DOWNLOAD_ERROR_ID_CONTENT
     };
 
+    const recordAllChunks = true;
+
     let retryTimers = [];
     let throughputHistory = {'audio': [], 'video': []};
 
     const internalLoad = function (config, remainingAttempts) {
-        let request = config.request;
-        let traces = [];
-        let now = new Date();
-        request.requestStartDate = now;
+        config.request.bytesLoaded = 0;
+        config.request.requestStartDate = new Date();
 
-        const {process} = ChunkProcessor({config: config, traces: traces, throughputHistory: throughputHistory});
-        const url = requestModifier.modifyRequestURL(request.url);
-        const method = request.checkForExistenceOnly ? 'HEAD' : 'GET';
-        const headers = new Headers(request.range ? { 'Range': 'bytes=' + request.range } : undefined);
-        const mode = mediaPlayerModel.getXHRWithCredentialsForType(request.type);
+        const index = config.request.index;
+        const mediaType = config.request.mediaType;
+        const url = requestModifier.modifyRequestURL(config.request.url);
+        const method = config.request.checkForExistenceOnly ? 'HEAD' : 'GET';
+        const headers = new Headers(config.request.range ? { 'Range': 'bytes=' + config.request.range } : undefined);
+        const mode = mediaPlayerModel.getXHRWithCredentialsForType(config.request.type);
+
+        let traces = [];
+        let firstChunkLoaded = false;
+
+        const process = function (chunk) {
+            firstChunkLoaded = true;
+            let [totalBits, totalMilliseconds] = throughputHistory[mediaType].reduce((acc, {bits, milliseconds}) => [acc[0] + bits, acc[1] + milliseconds], [0,0]);
+            throughputHistory[mediaType].splice(0);
+            let throughput = totalBits / totalMilliseconds;
+            log('livestat', mediaType, index, 'chunk completed in:', (totalMilliseconds / 1000).toFixed(3), 'throughput:', throughput.toFixed(0));
+            if (config.progress) {
+                // Need outgoing data to be of type ArrayBuffer for compatibility, unfortunately have to reallocate the ArrayBuffer
+                config.progress(chunk.slice().buffer);
+            }
+        };
 
         const fetcher = function () {
             fetch(url, {
@@ -126,7 +95,7 @@ const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, reque
                 headers: headers,
                 mode: mode
             }).then(function ({status, statusText, url, headers, body}) {
-                request.firstByteDate = new Date();
+                config.request.firstByteDate = new Date();
                 let headersString = '';
                 headers.forEach((key, value) => headersString += key + ': ' + value + '\r\n');
                 headersString = headersString.length > 0 ? headersString : null;
@@ -138,13 +107,11 @@ const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, reque
                     reader: body.getReader()
                 };
             }).then(function ({url, status, statusText, headers, reader}) {
-                request.bytesLoaded = 0;
+                let then, now;
                 let remaining = new Uint8Array();
                 const eat = function ({value, done}) {
                     if (done) {
                         if (0 < remaining.length) process(remaining);
-                        request.requestEndDate = new Date();
-                        request.bytesTotal = request.bytesLoaded;
                         return {
                             url: url,
                             status: status,
@@ -152,19 +119,36 @@ const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, reque
                             headers: headers
                         };
                     }
-                    request.bytesLoaded += value.length;
+                    now = new Date();
+                    then = then || now;
+                    let [bytes, milliseconds] = [value.length, now - then];
+                    config.request.bytesLoaded += bytes;
+                    if (recordAllChunks || !firstChunkLoaded) {
+                        throughputHistory[mediaType].push({
+                            bits: 8 * bytes,
+                            milliseconds: milliseconds || 1  // Avoid Infinity
+                        });
+                    }
+                    traces.push({
+                        s: then,
+                        d: milliseconds,
+                        b: [bytes]
+                    });
                     const progress = concat(remaining, value);
                     let completed = [];
-                    if (HTTPRequest.MEDIA_SEGMENT_TYPE === request.type) {
+                    if (HTTPRequest.MEDIA_SEGMENT_TYPE === config.request.type) {
                         [remaining, ...completed] = parse(progress).reverse();
                     } else {
                         remaining = progress;
                     }
+                    then = 0 < remaining.length ? now : undefined;
                     completed.reverse().forEach(process);
                     return reader.read().then(eat);
                 };
                 return reader.read().then(eat);
             }).then(function ({url, status, statusText, headers}) {
+                config.request.requestEndDate = new Date();
+                config.request.bytesTotal = config.request.bytesLoaded;
                 let success = status >= 200 && status <= 299;
                 if (success) {
                     if (config.success) {
@@ -178,9 +162,9 @@ const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, reque
                         remainingAttempts--;
                         retryTimers.push(setTimeout(function () {
                             internalLoad(config, remainingAttempts);
-                        }, mediaPlayerModel.getRetryIntervalForType(request.type)));
+                        }, mediaPlayerModel.getRetryIntervalForType(config.request.type)));
                     } else {
-                        errHandler.downloadError(downloadErrorToRequestTypeMap[request.type], request.url, request);
+                        errHandler.downloadError(downloadErrorToRequestTypeMap[config.request.type], config.request.url, config.request);
                         if (config.error) {
                             config.error(undefined, statusText, 'no attempts remaining');
                         }
@@ -189,27 +173,27 @@ const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, reque
                         }
                     }
                 }
-                if (!request.checkForExistenceOnly) {
+                if (!config.request.checkForExistenceOnly) {
                     metricsModel.addHttpRequest(
-                        request.mediaType,
+                        config.request.mediaType,
                         null,
-                        request.type,
-                        request.url,
+                        config.request.type,
+                        config.request.url,
                         url || null,
-                        request.serviceLocation || null,
-                        request.range || null,
-                        request.requestStartDate,
-                        request.firstByteDate,
-                        request.requestEndDate,
+                        config.request.serviceLocation || null,
+                        config.request.range || null,
+                        config.request.requestStartDate,
+                        config.request.firstByteDate,
+                        config.request.requestEndDate,
                         status,
-                        request.duration,
+                        config.request.duration,
                         headers,
                         success ? traces : null
                     );
                 }
-                let timePassed = (request.requestEndDate - request.requestStartDate) / 1000;
+                let timePassed = (config.request.requestEndDate - config.request.requestStartDate) / 1000;
                 log('livestat', 'loadend',
-                    'index:', request.index,
+                    'index:', config.request.index,
                     'time passed:', timePassed.toFixed(3));
             }).catch(function (error) {
                 log(error.message);
@@ -218,11 +202,11 @@ const FetchLoader = function ({errHandler, metricsModel, mediaPlayerModel, reque
 
 
         // Adds the ability to delay single fragment loading time to control buffer.
-        if (isNaN(request.delayLoadingTime) || now >= request.delayLoadingTime) {
+        if (isNaN(config.request.delayLoadingTime) || config.request.requestStartDate >= config.request.delayLoadingTime) {
             fetcher();
         } else {
             // Can keep track of timeouts and abort them before they are dispatched!
-            setTimeout(fetcher, (request.delayLoadingTime - now));
+            setTimeout(fetcher, (config.request.delayLoadingTime - config.request.requestStartDate));
         }
     };
 

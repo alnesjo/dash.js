@@ -37,15 +37,22 @@ import ISOBoxer from 'codem-isoboxer';
  */
 const parse = function (data) {
     const boxes = ISOBoxer.parseBuffer(data.buffer).boxes;
+
     let chunks = [];
     let [begin, end] = [0, 0];
-    boxes.forEach(function ({size, type}) {
+    let complete = false;
+
+    boxes.forEach(function ({size, type, _incomplete}) {
         end += size;
+        complete = !_incomplete;
         if ('mdat' === type) {
             chunks.push(data.subarray(begin, end));
             begin = end;
         }
     });
+
+    if (complete) chunks.push(data.subarray(end,end));
+
     return chunks;
 };
 
